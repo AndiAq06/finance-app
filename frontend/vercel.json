@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://government-bacteria-appears-since.trycloudflare.com/api/:path*"
+    },
+    {
+      "source": "/sanctum/:path*",
+      "destination": "https://government-bacteria-appears-since.trycloudflare.com/sanctum/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
