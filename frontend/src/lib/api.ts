@@ -24,11 +24,13 @@ function getCookie(name: string): string | null {
   return m ? decodeURIComponent(m[2]) : null
 }
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+
 let csrfPromise: Promise<void> | null = null
 export function ensureCsrf(force = false): Promise<void> {
   if (!force && getCookie('XSRF-TOKEN')) return Promise.resolve()
   if (!csrfPromise || force) {
-    csrfPromise = fetch('/sanctum/csrf-cookie', { credentials: 'include' }).then(() => undefined)
+    csrfPromise = fetch(`${API_BASE}/sanctum/csrf-cookie`, { credentials: 'include' }).then(() => undefined)
   }
   return csrfPromise
 }
@@ -75,7 +77,7 @@ async function request<T>(method: string, path: string, opts: RequestOpts = {}, 
 
   let res: Response
   try {
-    res = await fetch(`/api${path}${buildQuery(opts.query)}`, {
+    res = await fetch(`${API_BASE}/api${path}${buildQuery(opts.query)}`, {
       method,
       headers,
       body,
