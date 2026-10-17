@@ -1,0 +1,42 @@
+# Finora — lingkungan development lokal.
+# Jalankan: docker compose up -d   (lihat README.md)
+# Frontend dijalankan terpisah dengan `npm run dev` di folder frontend/.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: finora-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-finora}
+      MYSQL_USER: ${DB_USERNAME:-finora}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-finora_dev_password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-finora_root_dev_password}
+      TZ: UTC
+    ports:
+      - "33060:3306"
+    volumes:
+      - finora_mysql:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_ROOT_PASSWORD:-finora_root_dev_password}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: ./docker/php
+    container_name: finora-api
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    volumes:
+      - ./backend:/var/www/html
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  finora_mysql:
