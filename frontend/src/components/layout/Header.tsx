@@ -1,6 +1,6 @@
 import {
   Search, Bell, Sun, Moon, Laptop, LogOut, User as UserIcon, CheckCheck,
-  ChevronDown, PlusCircle, ArrowRightLeft,
+  ChevronDown, PlusCircle, ArrowRightLeft, Menu, Sparkles,
 } from 'lucide-react'
 import { useAuth, applyTheme } from '@/providers/auth'
 import { useNotifications, useFinanceMutation } from '@/lib/queries'
@@ -15,10 +15,12 @@ import {
 import { Button } from '@/components/ui/button'
 
 export function Header({
+  onOpenSidebar,
   onOpenSearch,
   onOpenQuickTransaction,
   onOpenQuickTransfer,
 }: {
+  onOpenSidebar?: () => void
   onOpenSearch: () => void
   onOpenQuickTransaction: () => void
   onOpenQuickTransfer: () => void
@@ -36,13 +38,33 @@ export function Header({
   const notifications = notifData?.data ?? []
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-surface/80 px-4 backdrop-blur-md sm:px-6">
-      {/* Search trigger */}
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center justify-between border-b border-border bg-surface/90 px-3 sm:px-6 backdrop-blur-md">
+      {/* Left section: Mobile menu + Brand + Search trigger */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {onOpenSidebar && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onOpenSidebar}
+            className="lg:hidden text-fg-muted hover:text-fg size-9"
+            aria-label="Buka Menu"
+          >
+            <Menu className="size-5" />
+          </Button>
+        )}
+
+        {/* Mobile brand mark */}
+        <div className="flex items-center gap-1.5 lg:hidden">
+          <div className="grid size-7 place-items-center rounded-lg bg-primary text-white shadow-sm">
+            <Sparkles className="size-4" />
+          </div>
+          <span className="font-extrabold tracking-tight text-sm text-fg">Finora</span>
+        </div>
+
         <button
           type="button"
           onClick={onOpenSearch}
-          className="flex h-10 w-64 items-center justify-between rounded-xl border border-border bg-surface-2 px-3 text-sm text-fg-subtle transition-all hover:border-border-strong hover:text-fg focus:outline-none focus:ring-2 focus:ring-primary/40 max-sm:w-10 max-sm:justify-center max-sm:p-0"
+          className="flex h-9 sm:h-10 w-9 sm:w-64 items-center justify-center sm:justify-between rounded-xl border border-border bg-surface-2 px-2 sm:px-3 text-sm text-fg-subtle transition-all hover:border-border-strong hover:text-fg focus:outline-none focus:ring-2 focus:ring-primary/40"
           title="Cari transaksi, rekening, target... (Ctrl+K)"
         >
           <span className="flex items-center gap-2">

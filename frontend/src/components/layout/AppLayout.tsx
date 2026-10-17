@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, ArrowLeftRight, Landmark, PieChart, Menu,
+  LayoutDashboard, ArrowLeftRight, Landmark, Target,
   PlusCircle,
 } from 'lucide-react'
 import { Header } from './Header'
@@ -34,8 +34,9 @@ export function AppLayout() {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content Area */}
-      <div className="flex min-w-0 flex-1 flex-col pb-16 lg:pb-0">
+      <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0">
         <Header
+          onOpenSidebar={() => setSidebarOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenQuickTransaction={() => {
             setTxType('expense')
@@ -47,99 +48,106 @@ export function AppLayout() {
           }}
         />
 
-        {/* Mobile top bar toggle button */}
-        <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-2.5 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-fg-muted hover:bg-surface-2 hover:text-fg"
-          >
-            <Menu className="size-5" /> Menu
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setTxType('expense')
-                setTxModalOpen(true)
-              }}
-              className="flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-fg"
-            >
-              <PlusCircle className="size-3.5" /> Transaksi
-            </button>
-          </div>
-        </div>
-
         {/* Page Content Container */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
           <Outlet />
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-around border-t border-border bg-surface/95 px-2 backdrop-blur-md lg:hidden">
+      {/* Mobile Bottom Navigation Bar (Native App Style) */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border/80 bg-surface/95 px-1 py-1 pb-[max(env(safe-area-inset-bottom),0.35rem)] backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.05)] lg:hidden">
         <NavLink
           to="/"
           end
           className={({ isActive }) =>
             cn(
-              'flex flex-col items-center justify-center gap-1 px-3 py-1 text-[11px] font-semibold transition-colors',
+              'flex flex-col items-center justify-center gap-1 px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-90',
               isActive ? 'text-primary' : 'text-fg-subtle hover:text-fg',
             )
           }
         >
-          <LayoutDashboard className="size-5" />
-          <span>Ringkasan</span>
+          {({ isActive }) => (
+            <>
+              <div className={cn('relative grid place-items-center', isActive && 'text-primary')}>
+                <LayoutDashboard className="size-5" />
+                {isActive && <span className="absolute -bottom-1 size-1 rounded-full bg-primary" />}
+              </div>
+              <span>Beranda</span>
+            </>
+          )}
         </NavLink>
+
         <NavLink
           to="/transactions"
           className={({ isActive }) =>
             cn(
-              'flex flex-col items-center justify-center gap-1 px-3 py-1 text-[11px] font-semibold transition-colors',
+              'flex flex-col items-center justify-center gap-1 px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-90',
               isActive ? 'text-primary' : 'text-fg-subtle hover:text-fg',
             )
           }
         >
-          <ArrowLeftRight className="size-5" />
-          <span>Transaksi</span>
+          {({ isActive }) => (
+            <>
+              <div className={cn('relative grid place-items-center', isActive && 'text-primary')}>
+                <ArrowLeftRight className="size-5" />
+                {isActive && <span className="absolute -bottom-1 size-1 rounded-full bg-primary" />}
+              </div>
+              <span>Transaksi</span>
+            </>
+          )}
         </NavLink>
 
-        {/* Center Action Button */}
+        {/* Center Floating Quick Action Button */}
         <button
           type="button"
           onClick={() => {
             setTxType('expense')
             setTxModalOpen(true)
           }}
-          className="-mt-5 grid size-12 place-items-center rounded-full bg-primary text-primary-fg shadow-lg shadow-primary/30 active:scale-95 transition-transform"
-          aria-label="Tambah Transaksi"
+          className="-mt-5 grid size-12 place-items-center rounded-full bg-primary text-primary-fg shadow-lg shadow-primary/40 ring-4 ring-bg active:scale-90 transition-all hover:brightness-105"
+          aria-label="Tambah Transaksi Cepat"
         >
           <PlusCircle className="size-6" />
         </button>
 
         <NavLink
+          to="/goals"
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center justify-center gap-1 px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-90',
+              isActive ? 'text-primary' : 'text-fg-subtle hover:text-fg',
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <div className={cn('relative grid place-items-center', isActive && 'text-primary')}>
+                <Target className="size-5" />
+                {isActive && <span className="absolute -bottom-1 size-1 rounded-full bg-primary" />}
+              </div>
+              <span>Target</span>
+            </>
+          )}
+        </NavLink>
+
+        <NavLink
           to="/accounts"
           className={({ isActive }) =>
             cn(
-              'flex flex-col items-center justify-center gap-1 px-3 py-1 text-[11px] font-semibold transition-colors',
+              'flex flex-col items-center justify-center gap-1 px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-90',
               isActive ? 'text-primary' : 'text-fg-subtle hover:text-fg',
             )
           }
         >
-          <Landmark className="size-5" />
-          <span>Rekening</span>
-        </NavLink>
-        <NavLink
-          to="/budgets"
-          className={({ isActive }) =>
-            cn(
-              'flex flex-col items-center justify-center gap-1 px-3 py-1 text-[11px] font-semibold transition-colors',
-              isActive ? 'text-primary' : 'text-fg-subtle hover:text-fg',
-            )
-          }
-        >
-          <PieChart className="size-5" />
-          <span>Anggaran</span>
+          {({ isActive }) => (
+            <>
+              <div className={cn('relative grid place-items-center', isActive && 'text-primary')}>
+                <Landmark className="size-5" />
+                {isActive && <span className="absolute -bottom-1 size-1 rounded-full bg-primary" />}
+              </div>
+              <span>Rekening</span>
+            </>
+          )}
         </NavLink>
       </nav>
 

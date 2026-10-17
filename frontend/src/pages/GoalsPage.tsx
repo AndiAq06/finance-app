@@ -121,8 +121,8 @@ export function GoalsPage() {
       {/* Top Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-fg">Target Tabungan (Goals)</h1>
-          <p className="text-sm text-fg-muted mt-0.5">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-fg">Target Tabungan (Goals)</h1>
+          <p className="text-xs sm:text-sm text-fg-muted mt-0.5">
             Rencanakan dan kumpulkan dana untuk impian, liburan, dan dana darurat Anda.
           </p>
         </div>
@@ -133,36 +133,36 @@ export function GoalsPage() {
             setEditGoal(null)
             setModalOpen(true)
           }}
-          className="gap-1.5"
+          className="gap-1.5 justify-center h-10 w-full sm:w-auto shadow-sm"
         >
           <PlusCircle className="size-4" /> Buat Target Baru
         </Button>
       </div>
 
       {/* Overview Progress Card */}
-      <Card className="p-6 bg-gradient-to-br from-surface to-surface-2">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="p-4 sm:p-6 bg-gradient-to-br from-surface to-surface-2 border-border/80">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-fg-subtle">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-fg-subtle">
               Total Dana Impian Terkumpul
             </span>
-            <p className="mt-1 text-3xl font-black tabular tracking-tight text-fg">
+            <p className="mt-1 text-2xl sm:text-3xl font-black tabular tracking-tight text-fg truncate">
               {formatRupiah(totalSaved)}
             </p>
             <p className="mt-1 text-xs text-fg-muted">
-              Dari sasaran total <strong className="text-fg">{formatRupiah(totalTarget)}</strong> across {goals.length} target
+              Dari target total <strong className="text-fg">{formatRupiah(totalTarget)}</strong> across {goals.length} target
             </p>
           </div>
 
-          <div className="text-right">
-            <Badge tone="primary" className="text-sm px-3 py-1 font-bold">
+          <div className="flex sm:text-right">
+            <Badge tone="primary" className="text-xs sm:text-sm px-3 py-1 font-bold">
               {totalPercent}% Tercapai
             </Badge>
           </div>
         </div>
 
-        <div className="mt-5">
-          <Progress value={totalPercent} tone="primary" className="h-2.5" />
+        <div className="mt-4 sm:mt-5">
+          <Progress value={totalPercent} tone="primary" className="h-2 sm:h-2.5" />
         </div>
       </Card>
 
@@ -174,8 +174,8 @@ export function GoalsPage() {
           <Skeleton className="h-56" />
         </div>
       ) : goals.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Target className="mx-auto size-12 text-fg-muted mb-3" />
+        <Card className="p-8 sm:p-12 text-center">
+          <Target className="mx-auto size-10 sm:size-12 text-fg-muted mb-3" />
           <p className="font-bold text-fg">Belum ada target tabungan</p>
           <p className="text-xs text-fg-muted mt-1">
             Mulailah dengan menetapkan target dana darurat, liburan, atau pembelian gadget impian.
@@ -193,13 +193,13 @@ export function GoalsPage() {
           </Button>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3.5 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {goals.map((g) => {
             const isAchieved = g.status === 'achieved' || g.percent >= 100
             return (
               <Card
                 key={g.id}
-                className="p-5 flex flex-col justify-between transition-all hover:border-border-strong relative"
+                className="p-4 sm:p-5 flex flex-col justify-between transition-all hover:border-border-strong relative"
               >
                 <div>
                   <div className="flex items-start justify-between">
@@ -239,9 +239,9 @@ export function GoalsPage() {
                   </div>
 
                   {/* Amounts */}
-                  <div className="mt-5 space-y-1">
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-2xl font-black tabular tracking-tight text-fg">
+                  <div className="mt-4 sm:mt-5 space-y-1">
+                    <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5 sm:gap-1">
+                      <span className="text-xl sm:text-2xl font-black tabular tracking-tight text-fg">
                         {formatRupiah(g.saved_amount)}
                       </span>
                       <span className="text-xs text-fg-subtle font-medium">

@@ -1,11 +1,12 @@
 import * as React from 'react'
 import {
   PlusCircle, Filter, Search, Edit2, Trash2, ChevronLeft, ChevronRight,
-  Download, Upload, Paperclip,
+  Download, Upload, Paperclip, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useTransactions, useAccounts, useCategories, useFinanceMutation } from '@/lib/queries'
 import { api } from '@/lib/api'
 import { formatRupiah } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { Card, Badge, Skeleton } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
 import { Input, Select } from '@/components/ui/input'
@@ -23,6 +24,7 @@ export function TransactionsPage() {
   const [categoryId, setCategoryId] = React.useState<string>('')
   const [startDate, setStartDate] = React.useState<string>('')
   const [endDate, setEndDate] = React.useState<string>('')
+  const [showFilters, setShowFilters] = React.useState(false)
 
   const [modalOpen, setModalOpen] = React.useState(false)
   const [importOpen, setImportOpen] = React.useState(false)
@@ -97,67 +99,69 @@ export function TransactionsPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={handleExportCsv}
-            loading={isExporting}
-            className="gap-1.5"
-            title="Ekspor CSV"
-          >
-            <Download className="size-4" /> Ekspor CSV
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setImportOpen(true)}
-            className="gap-1.5"
-            title="Impor CSV"
-          >
-            <Upload className="size-4" /> Impor CSV
-          </Button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button
             variant="primary"
             onClick={() => {
               setEditItem(null)
               setModalOpen(true)
             }}
-            className="gap-1.5"
+            className="gap-1.5 justify-center h-10 w-full sm:w-auto shadow-sm"
           >
             <PlusCircle className="size-4" /> Catat Transaksi
           </Button>
+
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <Button
+              variant="secondary"
+              onClick={handleExportCsv}
+              loading={isExporting}
+              className="gap-1.5 justify-center h-9 text-xs"
+              title="Ekspor CSV"
+            >
+              <Download className="size-3.5" /> Ekspor
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setImportOpen(true)}
+              className="gap-1.5 justify-center h-9 text-xs"
+              title="Impor CSV"
+            >
+              <Upload className="size-3.5" /> Impor
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="p-4">
-          <span className="text-xs font-bold text-fg-subtle uppercase">Pemasukan</span>
-          <p className="mt-1 text-xl font-bold tabular text-income">
+      {/* Summary KPI Cards (Clean 3-col grid on mobile) */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Card className="p-2.5 sm:p-4">
+          <span className="text-[10px] sm:text-xs font-bold text-fg-subtle uppercase truncate block">Pemasukan</span>
+          <p className="mt-0.5 sm:mt-1 text-xs sm:text-xl font-bold tabular text-income truncate">
             +{formatRupiah(summary?.income ?? '0')}
           </p>
         </Card>
-        <Card className="p-4">
-          <span className="text-xs font-bold text-fg-subtle uppercase">Pengeluaran</span>
-          <p className="mt-1 text-xl font-bold tabular text-expense">
+        <Card className="p-2.5 sm:p-4">
+          <span className="text-[10px] sm:text-xs font-bold text-fg-subtle uppercase truncate block">Pengeluaran</span>
+          <p className="mt-0.5 sm:mt-1 text-xs sm:text-xl font-bold tabular text-expense truncate">
             -{formatRupiah(summary?.expense ?? '0')}
           </p>
         </Card>
-        <Card className="p-4">
-          <span className="text-xs font-bold text-fg-subtle uppercase">Selisih Bersih (Net)</span>
-          <p className={`mt-1 text-xl font-bold tabular ${Number(summary?.net ?? 0) >= 0 ? 'text-fg' : 'text-expense'}`}>
+        <Card className="p-2.5 sm:p-4">
+          <span className="text-[10px] sm:text-xs font-bold text-fg-subtle uppercase truncate block">Selisih (Net)</span>
+          <p className={`mt-0.5 sm:mt-1 text-xs sm:text-xl font-bold tabular truncate ${Number(summary?.net ?? 0) >= 0 ? 'text-fg' : 'text-expense'}`}>
             {formatRupiah(summary?.net ?? '0', { sign: true })}
           </p>
         </Card>
       </div>
 
-      {/* Filters Bar */}
-      <Card className="p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Keyword Search */}
-          <div className="relative">
+      {/* Filters Bar with Mobile Collapsible Panel */}
+      <Card className="p-3 sm:p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
             <Input
-              placeholder="Cari deskripsi / toko..."
+              placeholder="Cari transaksi / toko..."
               value={q}
               onChange={(e) => {
                 setQ(e.target.value)
@@ -167,6 +171,19 @@ export function TransactionsPage() {
             />
           </div>
 
+          <Button
+            variant={[type, accountId, categoryId, startDate, endDate].filter(Boolean).length > 0 ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setShowFilters((prev) => !prev)}
+            className="sm:hidden gap-1.5 h-9 shrink-0 text-xs px-2.5"
+          >
+            <Filter className="size-3.5" />
+            <span>Filter {[type, accountId, categoryId, startDate, endDate].filter(Boolean).length > 0 ? `(${[type, accountId, categoryId, startDate, endDate].filter(Boolean).length})` : ''}</span>
+            {showFilters ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          </Button>
+        </div>
+
+        <div className={cn('grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 pt-1 sm:pt-0', !showFilters && 'hidden sm:grid')}>
           {/* Type Filter */}
           <Select
             value={type}

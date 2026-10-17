@@ -95,20 +95,20 @@ export function AccountsPage() {
             setEditAccount(null)
             setModalOpen(true)
           }}
-          className="gap-1.5"
+          className="gap-1.5 justify-center h-10 w-full sm:w-auto shadow-sm"
         >
           <PlusCircle className="size-4" /> Tambah Rekening
         </Button>
       </div>
 
       {/* Net Worth Highlight Card */}
-      <Card className="p-6 bg-gradient-to-r from-primary/10 via-surface to-surface border-primary/20">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <Card className="p-4 sm:p-6 bg-gradient-to-r from-primary/10 via-surface to-surface border-primary/20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-primary">
               Total Kekayaan Bersih (Net Worth)
             </span>
-            <p className="mt-1 text-3xl font-black tabular tracking-tight text-fg">
+            <p className="mt-1 text-2xl sm:text-3xl font-black tabular tracking-tight text-fg truncate">
               {formatRupiah(totalBalance)}
             </p>
             <p className="mt-1 text-xs text-fg-muted">
@@ -117,7 +117,7 @@ export function AccountsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Badge tone="primary" className="text-xs px-3 py-1">
+            <Badge tone="primary" className="text-xs px-2.5 sm:px-3 py-1">
               {accounts.length} Total Rekening
             </Badge>
           </div>
@@ -132,13 +132,13 @@ export function AccountsPage() {
           <Skeleton className="h-44" />
         </div>
       ) : accounts.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Landmark className="mx-auto size-12 text-fg-muted mb-3" />
+        <Card className="p-8 sm:p-12 text-center">
+          <Landmark className="mx-auto size-10 sm:size-12 text-fg-muted mb-3" />
           <p className="font-bold text-fg">Belum ada rekening</p>
           <p className="text-xs text-fg-muted mt-1">Tambahkan rekening bank atau dompet pertama Anda sekarang.</p>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3.5 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {accounts.map((acc) => (
             <Card
               key={acc.id}
