@@ -44,3 +44,8 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Local database dumps (data pribadi jangan di-push)
+*.sql
+!docker/mysql/init/*.sql
+
