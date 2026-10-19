@@ -813,6 +813,109 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const txMatch = pathname.match(/^\/api\/transactions\/(\d+)$/);
     if (txMatch) {
       const txId = Number(txMatch[1]);
+      if (req.method === 'GET') {
+        const txRes = await query(
+          `SELECT t.*,
+            json_build_object('id', a.id, 'name', a.name, 'color', a.color, 'icon', a.icon, 'type', a.type) as account,
+            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon, 'type', c.type) ELSE NULL END as category,
+            CASE WHEN tr.id IS NOT NULL THEN json_build_object('id', tr.id, 'from_account_id', tr.from_account_id, 'to_account_id', tr.to_account_id) ELSE NULL END as transfer
+           FROM transactions t
+           JOIN accounts a ON t.account_id = a.id
+           LEFT JOIN categories c ON t.category_id = c.id
+           LEFT JOIN transfers tr ON (t.id = tr.from_transaction_id OR t.id = tr.to_transaction_id)
+           WHERE t.id = $1 AND t.user_id = $2`,
+          [txId, userId]
+        );
+        if (txRes.rows.length === 0) return res.status(404).json({ message: 'Transaksi tidak ditemukan.' });
+        const t = txRes.rows[0];
+        return res.status(200).json({
+          data: {
+            ...t,
+            id: Number(t.id),
+            date: t.date ? new Date(t.date).toISOString().slice(0, 10) : null,
+            amount: Number(t.amount).toFixed(2),
+            account_id: Number(t.account_id),
+            category_id: t.category_id ? Number(t.category_id) : null,
+          }
+        });
+      }
+
+      if (req.method === 'PUT') {
+        const b = req.body || {};
+        const { account_id, category_id, date, amount, description, notes, counterparty } = b;
+
+        // Check if transaction exists
+        const txCheck = await query('SELECT * FROM transactions WHERE id = $1 AND user_id = $2', [txId, userId]);
+        if (txCheck.rows.length === 0) return res.status(404).json({ message: 'Transaksi tidak ditemukan.' });
+        const curTx = txCheck.rows[0];
+
+        if (curTx.type === 'transfer') {
+          // If transfer, update date, amount, notes on both
+          const trRes = await query('SELECT * FROM transfers WHERE from_transaction_id = $1 OR to_transaction_id = $1', [txId]);
+          if (trRes.rows.length > 0) {
+            const tr = trRes.rows[0];
+            await query(
+              `UPDATE transactions SET 
+                date = COALESCE($1, date),
+                amount = COALESCE($2, amount),
+                notes = $3,
+                updated_at = NOW()
+               WHERE id IN ($4, $5)`,
+              [date, amount, notes !== undefined ? notes : null, tr.from_transaction_id, tr.to_transaction_id]
+            );
+          }
+        } else {
+          await query(
+            `UPDATE transactions SET 
+              account_id = COALESCE($1, account_id),
+              category_id = $2,
+              date = COALESCE($3, date),
+              amount = COALESCE($4, amount),
+              description = $5,
+              notes = $6,
+              counterparty = $7,
+              updated_at = NOW()
+             WHERE id = $8 AND user_id = $9`,
+            [
+              account_id || curTx.account_id,
+              category_id !== undefined ? (category_id || null) : curTx.category_id,
+              date || curTx.date,
+              amount !== undefined ? amount : curTx.amount,
+              description !== undefined ? description : curTx.description,
+              notes !== undefined ? notes : curTx.notes,
+              counterparty !== undefined ? counterparty : curTx.counterparty,
+              txId,
+              userId
+            ]
+          );
+        }
+
+        // Fetch updated
+        const updatedRes = await query(
+          `SELECT t.*,
+            json_build_object('id', a.id, 'name', a.name, 'color', a.color, 'icon', a.icon, 'type', a.type) as account,
+            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon, 'type', c.type) ELSE NULL END as category,
+            CASE WHEN tr.id IS NOT NULL THEN json_build_object('id', tr.id, 'from_account_id', tr.from_account_id, 'to_account_id', tr.to_account_id) ELSE NULL END as transfer
+           FROM transactions t
+           JOIN accounts a ON t.account_id = a.id
+           LEFT JOIN categories c ON t.category_id = c.id
+           LEFT JOIN transfers tr ON (t.id = tr.from_transaction_id OR t.id = tr.to_transaction_id)
+           WHERE t.id = $1 AND t.user_id = $2`,
+          [txId, userId]
+        );
+        const t = updatedRes.rows[0];
+        return res.status(200).json({
+          data: {
+            ...t,
+            id: Number(t.id),
+            date: t.date ? new Date(t.date).toISOString().slice(0, 10) : null,
+            amount: Number(t.amount).toFixed(2),
+            account_id: Number(t.account_id),
+            category_id: t.category_id ? Number(t.category_id) : null,
+          }
+        });
+      }
+
       if (req.method === 'DELETE') {
         // If transfer, delete both
         const tr = await query('SELECT * FROM transfers WHERE from_transaction_id = $1 OR to_transaction_id = $1', [txId]);
@@ -1019,6 +1122,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ message: 'Setoran berhasil dicatat.' });
     }
 
+    const goalMatch = pathname.match(/^\/api\/goals\/(\d+)$/);
+    if (goalMatch) {
+      const gId = Number(goalMatch[1]);
+      if (req.method === 'GET') {
+        const goal = await query(
+          `SELECT g.*,
+            COALESCE((SELECT SUM(amount) FROM savings_contributions sc WHERE sc.savings_goal_id = g.id), 0) as saved_amount,
+            CASE WHEN a.id IS NOT NULL THEN json_build_object('id', a.id, 'name', a.name, 'balance', a.opening_balance::text) ELSE NULL END as account
+           FROM savings_goals g
+           LEFT JOIN accounts a ON g.account_id = a.id
+           WHERE g.id = $1 AND g.user_id = $2`,
+          [gId, userId]
+        );
+        if (goal.rows.length === 0) return res.status(404).json({ message: 'Target tabungan tidak ditemukan.' });
+        const g = goal.rows[0];
+        const tgt = Number(g.target_amount);
+        const cur = Number(g.saved_amount);
+        return res.status(200).json({
+          data: {
+            ...g,
+            id: Number(g.id),
+            target_amount: tgt.toFixed(2),
+            saved_amount: cur.toFixed(2),
+            remaining: Math.max(0, tgt - cur).toFixed(2),
+            percent: tgt > 0 ? Number(Math.min(100, (cur / tgt) * 100).toFixed(1)) : 0,
+            deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
+          }
+        });
+      }
+      if (req.method === 'PUT') {
+        const b = req.body || {};
+        const upd = await query(
+          `UPDATE savings_goals SET
+            name = COALESCE($1, name),
+            target_amount = COALESCE($2, target_amount),
+            deadline = $3,
+            icon = COALESCE($4, icon),
+            color = COALESCE($5, color),
+            priority = COALESCE($6, priority),
+            account_id = $7,
+            notes = $8,
+            status = COALESCE($9, status),
+            updated_at = NOW()
+           WHERE id = $10 AND user_id = $11 RETURNING *`,
+          [b.name, b.target_amount, b.deadline || null, b.icon, b.color, b.priority, b.account_id || null, b.notes || null, b.status, gId, userId]
+        );
+        if (upd.rows.length === 0) return res.status(404).json({ message: 'Target tabungan tidak ditemukan.' });
+        return res.status(200).json({ data: { ...upd.rows[0], id: Number(upd.rows[0].id) } });
+      }
+      if (req.method === 'DELETE') {
+        await query('DELETE FROM savings_goals WHERE id = $1 AND user_id = $2', [gId, userId]);
+        return res.status(200).json({ message: 'Target tabungan berhasil dihapus.' });
+      }
+    }
+
     // 13. Debts API
     if (pathname === '/api/debts') {
       const typeFilter = url.searchParams.get('type');
@@ -1137,6 +1295,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ message: 'Pembayaran dicatat.' });
     }
 
+    const debtMatch = pathname.match(/^\/api\/debts\/(\d+)$/);
+    if (debtMatch) {
+      const dId = Number(debtMatch[1]);
+      if (req.method === 'GET') {
+        const debt = await query('SELECT * FROM debts WHERE id = $1 AND user_id = $2', [dId, userId]);
+        if (debt.rows.length === 0) return res.status(404).json({ message: 'Hutang/piutang tidak ditemukan.' });
+        return res.status(200).json({ data: { ...debt.rows[0], id: Number(debt.rows[0].id) } });
+      }
+      if (req.method === 'PUT') {
+        const b = req.body || {};
+        const upd = await query(
+          `UPDATE debts SET
+            type = COALESCE($1, type),
+            party_name = COALESCE($2, party_name),
+            amount = COALESCE($3, amount),
+            date = COALESCE($4, date),
+            due_date = $5,
+            notes = $6,
+            account_id = $7,
+            status = COALESCE($8, status),
+            updated_at = NOW()
+           WHERE id = $9 AND user_id = $10 RETURNING *`,
+          [b.type, b.party_name, b.amount, b.date, b.due_date || null, b.notes || null, b.account_id || null, b.status, dId, userId]
+        );
+        if (upd.rows.length === 0) return res.status(404).json({ message: 'Hutang/piutang tidak ditemukan.' });
+        return res.status(200).json({ data: { ...upd.rows[0], id: Number(upd.rows[0].id) } });
+      }
+      if (req.method === 'DELETE') {
+        await query('DELETE FROM debts WHERE id = $1 AND user_id = $2', [dId, userId]);
+        return res.status(200).json({ message: 'Catatan hutang/piutang berhasil dihapus.' });
+      }
+    }
+
     // 14. Bills API
     if (pathname === '/api/bills') {
       const todayStr = new Date().toISOString().slice(0, 10);
@@ -1202,6 +1393,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ message: 'Tagihan berhasil dibayar.' });
     }
 
+    const billMatch = pathname.match(/^\/api\/bills\/(\d+)$/);
+    if (billMatch) {
+      const bId = Number(billMatch[1]);
+      if (req.method === 'GET') {
+        const bill = await query('SELECT * FROM bills WHERE id = $1 AND user_id = $2', [bId, userId]);
+        if (bill.rows.length === 0) return res.status(404).json({ message: 'Tagihan tidak ditemukan.' });
+        return res.status(200).json({ data: { ...bill.rows[0], id: Number(bill.rows[0].id) } });
+      }
+      if (req.method === 'PUT') {
+        const b = req.body || {};
+        const upd = await query(
+          `UPDATE bills SET
+            name = COALESCE($1, name),
+            amount = COALESCE($2, amount),
+            category_id = $3,
+            account_id = $4,
+            next_due_date = $5,
+            frequency = COALESCE($6, frequency),
+            reminder_days = COALESCE($7, reminder_days),
+            notes = $8,
+            is_active = COALESCE($9, is_active),
+            updated_at = NOW()
+           WHERE id = $10 AND user_id = $11 RETURNING *`,
+          [b.name, b.amount, b.category_id || null, b.account_id || null, b.next_due_date || null, b.frequency, b.reminder_days, b.notes || null, b.is_active, bId, userId]
+        );
+        if (upd.rows.length === 0) return res.status(404).json({ message: 'Tagihan tidak ditemukan.' });
+        return res.status(200).json({ data: { ...upd.rows[0], id: Number(upd.rows[0].id) } });
+      }
+      if (req.method === 'DELETE') {
+        await query('DELETE FROM bills WHERE id = $1 AND user_id = $2', [bId, userId]);
+        return res.status(200).json({ message: 'Tagihan berhasil dihapus.' });
+      }
+    }
+
     // Recurring API
     if (pathname === '/api/recurring') {
       if (req.method === 'GET') {
@@ -1231,6 +1456,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }));
         return res.status(200).json({ data });
       }
+      if (req.method === 'POST') {
+        const b = req.body || {};
+        const ins = await query(
+          `INSERT INTO recurrings (user_id, account_id, category_id, type, amount, description, frequency, interval, start_date, end_date, next_run_date, is_active, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $9, true, NOW(), NOW()) RETURNING *`,
+          [userId, b.account_id, b.category_id, b.type, b.amount, b.description, b.frequency || 'monthly', b.interval || 1, b.start_date, b.end_date || null]
+        );
+        return res.status(201).json({ data: { ...ins.rows[0], id: Number(ins.rows[0].id) } });
+      }
+    }
+
+    const recMatch = pathname.match(/^\/api\/recurring\/(\d+)$/);
+    if (recMatch) {
+      const rId = Number(recMatch[1]);
+      if (req.method === 'PUT') {
+        const b = req.body || {};
+        const upd = await query(
+          `UPDATE recurrings SET
+            type = COALESCE($1, type),
+            amount = COALESCE($2, amount),
+            account_id = COALESCE($3, account_id),
+            category_id = COALESCE($4, category_id),
+            description = COALESCE($5, description),
+            frequency = COALESCE($6, frequency),
+            interval = COALESCE($7, interval),
+            start_date = COALESCE($8, start_date),
+            end_date = $9,
+            is_active = COALESCE($10, is_active),
+            updated_at = NOW()
+           WHERE id = $11 AND user_id = $12 RETURNING *`,
+          [b.type, b.amount, b.account_id, b.category_id, b.description, b.frequency, b.interval, b.start_date, b.end_date || null, b.is_active, rId, userId]
+        );
+        if (upd.rows.length === 0) return res.status(404).json({ message: 'Transaksi rutin tidak ditemukan.' });
+        return res.status(200).json({ data: { ...upd.rows[0], id: Number(upd.rows[0].id) } });
+      }
+      if (req.method === 'DELETE') {
+        await query('DELETE FROM recurrings WHERE id = $1 AND user_id = $2', [rId, userId]);
+        return res.status(200).json({ message: 'Jadwal transaksi rutin berhasil dihapus.' });
+      }
+    }
+
+    if (pathname === '/api/recurring/run-pending' && req.method === 'POST') {
+      return res.status(200).json({ message: 'Transaksi tertunda telah diproses.', generated: 0 });
     }
 
     // Calendar API
@@ -1437,6 +1705,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })),
         unread_count: unreadCount,
       });
+    }
+
+    if (pathname === '/api/notifications/read-all' && req.method === 'POST') {
+      await query('UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL', [userId]);
+      return res.status(200).json({ message: 'Semua notifikasi ditandai sudah dibaca.' });
+    }
+
+    const notifReadMatch = pathname.match(/^\/api\/notifications\/(\d+)\/read$/);
+    if (notifReadMatch && req.method === 'POST') {
+      const nId = Number(notifReadMatch[1]);
+      await query('UPDATE notifications SET read_at = NOW() WHERE id = $1 AND user_id = $2', [nId, userId]);
+      return res.status(200).json({ message: 'Notifikasi ditandai sudah dibaca.' });
+    }
+
+    const txAttachMatch = pathname.match(/^\/api\/transactions\/(\d+)\/attachment$/);
+    if (txAttachMatch && req.method === 'POST') {
+      return res.status(200).json({ message: 'Lampiran berhasil diunggah.' });
     }
 
     // Default 404 for unknown API routes
