@@ -243,6 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 7. Accounts API
     if (pathname === '/api/accounts') {
       if (req.method === 'GET') {
+        const includeInactive = url.searchParams.get('include_inactive') === '1';
         const accounts = await query(
           `SELECT a.*,
             COALESCE((SELECT COUNT(*) FROM transactions t WHERE t.account_id = a.id), 0) as transactions_count,
@@ -251,18 +252,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              COALESCE((SELECT SUM(amount) FROM transactions t WHERE t.account_id = a.id AND t.flow = 'out'), 0)
             ) as balance
            FROM accounts a
-           WHERE a.user_id = $1 AND a.is_active = true
-           ORDER BY a.id ASC`,
+           WHERE a.user_id = $1 ${includeInactive ? '' : 'AND a.is_active = true'}
+           ORDER BY a.name ASC`,
           [userId]
         );
-        const data = accounts.rows.map(a => ({
-          ...a,
-          id: Number(a.id),
-          opening_balance: Number(a.opening_balance).toFixed(2),
-          balance: Number(a.balance).toFixed(2),
-          transactions_count: Number(a.transactions_count),
-        }));
-        return res.status(200).json(data);
+        let totalBalance = 0;
+        const data = accounts.rows.map(a => {
+          const bal = Number(a.balance);
+          if (a.is_active) totalBalance += bal;
+          return {
+            id: Number(a.id),
+            name: a.name,
+            type: a.type,
+            opening_balance: Number(a.opening_balance).toFixed(2),
+            start_date: a.start_date ? new Date(a.start_date).toISOString().slice(0, 10) : null,
+            color: a.color,
+            icon: a.icon,
+            is_active: Boolean(a.is_active),
+            notes: a.notes,
+            balance: bal.toFixed(2),
+            transactions_count: Number(a.transactions_count),
+          };
+        });
+        return res.status(200).json({
+          data,
+          total_balance: totalBalance.toFixed(2),
+        });
       }
       if (req.method === 'POST') {
         const b = req.body || {};
@@ -314,14 +329,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             COALESCE((SELECT COUNT(*) FROM transactions t WHERE t.category_id = c.id), 0) as transactions_count
            FROM categories c
            WHERE c.user_id = $1 OR c.user_id IS NULL
-           ORDER BY c.id ASC`,
+           ORDER BY c.type, c.name ASC`,
           [userId]
         );
-        return res.status(200).json(cats.rows.map(c => ({
-          ...c,
-          id: Number(c.id),
-          transactions_count: Number(c.transactions_count),
-        })));
+        return res.status(200).json({
+          data: cats.rows.map(c => ({
+            id: Number(c.id),
+            name: c.name,
+            type: c.type,
+            icon: c.icon,
+            color: c.color,
+            is_default: Boolean(c.is_default),
+            transactions_count: Number(c.transactions_count),
+          }))
+        });
       }
       if (req.method === 'POST') {
         const b = req.body || {};
@@ -350,6 +371,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const lastDay = new Date(year, month, 0).getDate();
       const endOfMonth = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
+      // Previous month
+      const prevDate = new Date(year, month - 2, 1);
+      const prevYear = prevDate.getFullYear();
+      const prevMonth = prevDate.getMonth() + 1;
+      const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+      const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+      const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
+
       // Accounts
       const accountsRes = await query(
         `SELECT a.*,
@@ -360,7 +389,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           COALESCE((SELECT COUNT(*) FROM transactions t WHERE t.account_id = a.id), 0) as transactions_count
          FROM accounts a
          WHERE a.user_id = $1 AND a.is_active = true
-         ORDER BY a.id ASC`,
+         ORDER BY a.name ASC`,
         [userId]
       );
 
@@ -373,7 +402,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           name: a.name,
           type: a.type,
           opening_balance: Number(a.opening_balance).toFixed(2),
-          start_date: a.start_date,
+          start_date: a.start_date ? new Date(a.start_date).toISOString().slice(0, 10) : null,
           color: a.color,
           icon: a.icon,
           is_active: Boolean(a.is_active),
@@ -401,6 +430,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const net = income - expense;
 
+      // Previous month
+      const prevTxRes = await query(
+        `SELECT flow, SUM(amount) as total 
+         FROM transactions 
+         WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3 
+         GROUP BY flow`,
+        [userId, prevStart, prevEnd]
+      );
+      let prevIncome = 0;
+      let prevExpense = 0;
+      prevTxRes.rows.forEach(r => {
+        if (r.flow === 'in') prevIncome += Number(r.total);
+        if (r.flow === 'out') prevExpense += Number(r.total);
+      });
+      const prevNet = prevIncome - prevExpense;
+
+      const incomeChange = prevIncome > 0 ? ((income - prevIncome) / prevIncome) * 100 : null;
+      const expenseChange = prevExpense > 0 ? ((expense - prevExpense) / prevExpense) * 100 : null;
+      const netChange = prevNet !== 0 ? ((net - prevNet) / Math.abs(prevNet)) * 100 : null;
+      const savingsRate = income > 0 ? Math.max(0, (net / income) * 100) : null;
+
       // Category expenses breakdown
       const catExpRes = await query(
         `SELECT t.category_id, c.name, c.color, c.icon, SUM(t.amount) as total, COUNT(*) as count
@@ -424,24 +474,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
       });
 
-      // Recent Transactions
-      const recentTx = await query(
-        `SELECT t.*,
-          json_build_object('id', a.id, 'name', a.name, 'color', a.color, 'icon', a.icon, 'type', a.type) as account,
-          CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon, 'type', c.type) ELSE NULL END as category
-         FROM transactions t
-         JOIN accounts a ON t.account_id = a.id
-         LEFT JOIN categories c ON t.category_id = c.id
-         WHERE t.user_id = $1
-         ORDER BY t.date DESC, t.id DESC
-         LIMIT 6`,
-        [userId]
-      );
-
       // Budgets
       const budgetsRes = await query(
         `SELECT b.*,
-          CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon) ELSE NULL END as category,
           COALESCE((
             SELECT SUM(amount) FROM transactions t 
             WHERE t.user_id = b.user_id AND t.flow = 'out' AND t.type != 'transfer' 
@@ -449,161 +484,195 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               AND to_char(t.date, 'YYYY-MM') = b.month
           ), 0) as spent
          FROM budgets b
-         LEFT JOIN categories c ON b.category_id = c.id
          WHERE b.user_id = $1 AND b.month = $2`,
         [userId, monthStr]
       );
-      let totalBudgetLimit = 0;
-      let totalBudgetSpent = 0;
-      const budgetItems = budgetsRes.rows.map(b => {
-        const amt = Number(b.amount);
-        const spent = Number(b.spent);
-        const rem = amt - spent;
-        const pct = amt > 0 ? (spent / amt) * 100 : 0;
-        if (b.category_id === null) {
-          totalBudgetLimit = amt;
-          totalBudgetSpent = spent;
+      let totalBudgeted = 0;
+      let budgetSpent = 0;
+      let overCount = 0;
+      let warningCount = 0;
+      const catBudgets = budgetsRes.rows.filter(b => b.category_id !== null);
+      catBudgets.forEach(b => {
+        const bAmt = Number(b.amount);
+        const bSp = Number(b.spent);
+        totalBudgeted += bAmt;
+        budgetSpent += bSp;
+        if (bAmt > 0) {
+          const pct = (bSp / bAmt) * 100;
+          if (pct > 100) overCount++;
+          else if (pct >= 75) warningCount++;
         }
-        return {
-          id: Number(b.id),
-          category_id: b.category_id ? Number(b.category_id) : null,
-          category: b.category,
-          amount: amt.toFixed(2),
-          spent: spent.toFixed(2),
-          remaining: rem.toFixed(2),
-          percent: Number(pct.toFixed(1)),
-          level: pct >= 100 ? 'over' : pct >= 80 ? 'danger' : pct >= 50 ? 'warning' : 'safe'
-        };
       });
+      const overallBudget = budgetsRes.rows.find(b => b.category_id === null);
+      if (overallBudget && totalBudgeted === 0) {
+        totalBudgeted = Number(overallBudget.amount);
+        budgetSpent = Number(overallBudget.spent);
+      }
+      const budgetRemaining = Math.max(0, totalBudgeted - budgetSpent);
+      const budgetPercent = totalBudgeted > 0 ? Number(((budgetSpent / totalBudgeted) * 100).toFixed(1)) : 0;
 
       // Savings Goals
       const goalsRes = await query(
         `SELECT g.*,
-          COALESCE((SELECT SUM(amount) FROM savings_contributions sc WHERE sc.savings_goal_id = g.id), 0) as current_amount
+          COALESCE((SELECT SUM(amount) FROM savings_contributions sc WHERE sc.savings_goal_id = g.id), 0) as saved_amount,
+          json_build_object('id', a.id, 'name', a.name, 'balance', a.opening_balance::text) as account
          FROM savings_goals g
+         LEFT JOIN accounts a ON g.account_id = a.id
          WHERE g.user_id = $1 AND g.status = 'active'
-         ORDER BY g.priority ASC`,
+         ORDER BY g.priority ASC
+         LIMIT 4`,
         [userId]
       );
-      let totalSavingsTarget = 0;
-      let totalSavingsCurrent = 0;
       const goals = goalsRes.rows.map(g => {
-        const cur = Number(g.current_amount);
+        const cur = Number(g.saved_amount);
         const tgt = Number(g.target_amount);
-        totalSavingsCurrent += cur;
-        totalSavingsTarget += tgt;
         return {
           id: Number(g.id),
           name: g.name,
           target_amount: tgt.toFixed(2),
-          current_amount: cur.toFixed(2),
-          color: g.color,
+          saved_amount: cur.toFixed(2),
+          remaining: Math.max(0, tgt - cur).toFixed(2),
+          percent: tgt > 0 ? Number(Math.min(100, (cur / tgt) * 100).toFixed(1)) : 0,
+          deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
           icon: g.icon,
-          percent: tgt > 0 ? Number(((cur / tgt) * 100).toFixed(1)) : 0,
+          color: g.color,
+          priority: Number(g.priority),
+          account_id: g.account_id ? Number(g.account_id) : null,
+          account: g.account?.id ? g.account : null,
+          notes: g.notes,
+          status: g.status,
+          required_per_month: null,
+          required_per_week: null,
+          months_left: null,
         };
       });
 
       // Bills upcoming
       const billsRes = await query(
         `SELECT b.*,
-          c.name as category_name
+          CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon) ELSE NULL END as category,
+          CASE WHEN a.id IS NOT NULL THEN json_build_object('id', a.id, 'name', a.name) ELSE NULL END as account
          FROM bills b
          LEFT JOIN categories c ON b.category_id = c.id
+         LEFT JOIN accounts a ON b.account_id = a.id
          WHERE b.user_id = $1 AND b.is_active = true
          ORDER BY b.next_due_date ASC
          LIMIT 5`,
         [userId]
       );
-      const bills = billsRes.rows.map(b => ({
-        id: Number(b.id),
-        name: b.name,
-        amount: Number(b.amount).toFixed(2),
-        next_due_date: b.next_due_date,
-        frequency: b.frequency,
-        is_paid: false,
-      }));
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const upcoming_bills = billsRes.rows.map(b => {
+        const dueDate = b.next_due_date ? new Date(b.next_due_date).toISOString().slice(0, 10) : null;
+        const isOverdue = Boolean(dueDate && dueDate < todayStr);
+        return {
+          id: Number(b.id),
+          name: b.name,
+          amount: Number(b.amount).toFixed(2),
+          category_id: b.category_id ? Number(b.category_id) : null,
+          category: b.category,
+          account_id: b.account_id ? Number(b.account_id) : null,
+          account: b.account,
+          next_due_date: dueDate,
+          frequency: b.frequency,
+          reminder_days: Number(b.reminder_days || 3),
+          notes: b.notes,
+          is_active: Boolean(b.is_active),
+          status: isOverdue ? 'overdue' : 'unpaid',
+          days_until_due: null,
+          last_paid_date: null,
+        };
+      });
 
       // Debts summary
       const debtsRes = await query(
         `SELECT d.*,
           COALESCE((SELECT SUM(amount) FROM debt_payments dp WHERE dp.debt_id = d.id), 0) as paid_amount
          FROM debts d
-         WHERE d.user_id = $1 AND d.status != 'paid'`,
+         WHERE d.user_id = $1`,
         [userId]
       );
-      let totalReceivable = 0;
-      let totalPayable = 0;
+      let debtRemaining = 0;
+      let recRemaining = 0;
+      let debtCount = 0;
+      let recCount = 0;
+      let overdueCount = 0;
       debtsRes.rows.forEach(d => {
-        const rem = Number(d.amount) - Number(d.paid_amount);
-        if (d.type === 'receivable') totalReceivable += rem;
-        else totalPayable += rem;
+        const rem = Math.max(0, Number(d.amount) - Number(d.paid_amount));
+        const isOverdue = Boolean(d.due_date && new Date(d.due_date).toISOString().slice(0, 10) < todayStr && d.status !== 'paid');
+        if (d.type === 'debt') {
+          debtRemaining += rem;
+          if (d.status !== 'paid') debtCount++;
+        } else {
+          recRemaining += rem;
+          if (d.status !== 'paid') recCount++;
+        }
+        if (isOverdue) overdueCount++;
       });
 
-      // Cash flow 6 months trend
-      const cashFlowTrend = [];
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(year, month - 1 - i, 1);
-        const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const mStart = `${mStr}-01`;
-        const mEnd = `${mStr}-${String(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
-
-        const mRes = await query(
-          `SELECT flow, SUM(amount) as total 
-           FROM transactions 
-           WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3 
-           GROUP BY flow`,
-          [userId, mStart, mEnd]
-        );
-        let inc = 0;
-        let exp = 0;
-        mRes.rows.forEach(r => {
-          if (r.flow === 'in') inc = Number(r.total);
-          if (r.flow === 'out') exp = Number(r.total);
-        });
-        cashFlowTrend.push({
-          month: mStr,
-          label: d.toLocaleDateString('id-ID', { month: 'short' }),
-          income: inc,
-          expense: exp,
-          net: inc - exp
-        });
-      }
+      // Recent Transactions
+      const recentTx = await query(
+        `SELECT t.*,
+          json_build_object('id', a.id, 'name', a.name, 'color', a.color, 'icon', a.icon, 'type', a.type) as account,
+          CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon, 'type', c.type) ELSE NULL END as category,
+          CASE WHEN tr.id IS NOT NULL THEN json_build_object('id', tr.id, 'from_account_id', tr.from_account_id, 'to_account_id', tr.to_account_id) ELSE NULL END as transfer
+         FROM transactions t
+         JOIN accounts a ON t.account_id = a.id
+         LEFT JOIN categories c ON t.category_id = c.id
+         LEFT JOIN transfers tr ON (t.id = tr.from_transaction_id OR t.id = tr.to_transaction_id)
+         WHERE t.user_id = $1
+         ORDER BY t.date DESC, t.id DESC
+         LIMIT 10`,
+        [userId]
+      );
 
       return res.status(200).json({
-        period: { month: monthStr, start: startOfMonth, end: endOfMonth },
-        net_worth: (totalBalance + totalReceivable - totalPayable).toFixed(2),
+        period: {
+          month: monthStr,
+          date_from: startOfMonth,
+          date_to: endOfMonth,
+          prev_from: prevStart,
+          prev_to: prevEnd
+        },
         total_balance: totalBalance.toFixed(2),
-        kpi: {
+        accounts,
+        month: {
           income: income.toFixed(2),
           expense: expense.toFixed(2),
           net: net.toFixed(2),
-          transactions_count: txCount,
-          savings_rate: income > 0 ? Number(((net / income) * 100).toFixed(1)) : 0,
+          prev_income: prevIncome.toFixed(2),
+          prev_expense: prevExpense.toFixed(2),
+          prev_net: prevNet.toFixed(2),
+          income_change_pct: incomeChange !== null ? Number(incomeChange.toFixed(1)) : null,
+          expense_change_pct: expenseChange !== null ? Number(expenseChange.toFixed(1)) : null,
+          net_change_pct: netChange !== null ? Number(netChange.toFixed(1)) : null,
+          savings_rate: savingsRate !== null ? Number(savingsRate.toFixed(1)) : null,
+          transaction_count: txCount,
         },
-        accounts,
+        expense_by_category,
+        budget: {
+          budgeted: totalBudgeted.toFixed(2),
+          spent: budgetSpent.toFixed(2),
+          remaining: budgetRemaining.toFixed(2),
+          percent: budgetPercent,
+          has_budget: totalBudgeted > 0,
+          over_count: overCount,
+          warning_count: warningCount,
+        },
+        goals,
         recent_transactions: recentTx.rows.map(t => ({
           ...t,
           id: Number(t.id),
+          date: t.date ? new Date(t.date).toISOString().slice(0, 10) : null,
           amount: Number(t.amount).toFixed(2),
         })),
-        cash_flow_trend: cashFlowTrend,
-        expense_by_category,
-        budget: {
-          total_limit: totalBudgetLimit.toFixed(2),
-          total_spent: totalBudgetSpent.toFixed(2),
-          percent: totalBudgetLimit > 0 ? Number(((totalBudgetSpent / totalBudgetLimit) * 100).toFixed(1)) : 0,
-          items: budgetItems,
-        },
-        savings_goals: {
-          total_target: totalSavingsTarget.toFixed(2),
-          total_current: totalSavingsCurrent.toFixed(2),
-          items: goals,
-        },
-        upcoming_bills: bills,
+        upcoming_bills,
         debts: {
-          receivable: totalReceivable.toFixed(2),
-          debt: totalPayable.toFixed(2),
-        }
+          debt_remaining: debtRemaining.toFixed(2),
+          receivable_remaining: recRemaining.toFixed(2),
+          debt_count: debtCount,
+          receivable_count: recCount,
+          overdue_count: overdueCount,
+        },
       });
     }
 
@@ -762,46 +831,106 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (pathname === '/api/budgets') {
       const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
       if (req.method === 'GET') {
-        const budgets = await query(
+        const [year, mNum] = month.split('-').map(Number);
+        const lastDay = new Date(year, mNum, 0).getDate();
+        const startOfMonth = `${month}-01`;
+        const endOfMonth = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+        // Get total spent per category this month
+        const catSpentRes = await query(
+          `SELECT category_id, SUM(amount) as total_spent
+           FROM transactions
+           WHERE user_id = $1 AND flow = 'out' AND type != 'transfer' AND date >= $2 AND date <= $3
+           GROUP BY category_id`,
+          [userId, startOfMonth, endOfMonth]
+        );
+        const spentMap = new Map<number | null, number>();
+        let totalMonthExpense = 0;
+        catSpentRes.rows.forEach(r => {
+          const sp = Number(r.total_spent);
+          totalMonthExpense += sp;
+          spentMap.set(r.category_id ? Number(r.category_id) : null, sp);
+        });
+
+        const budgetsRes = await query(
           `SELECT b.*,
-            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon) ELSE NULL END as category,
-            COALESCE((
-              SELECT SUM(amount) FROM transactions t 
-              WHERE t.user_id = b.user_id AND t.flow = 'out' AND t.type != 'transfer' 
-                AND (b.category_id IS NULL OR t.category_id = b.category_id)
-                AND to_char(t.date, 'YYYY-MM') = b.month
-            ), 0) as spent
+            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon) ELSE NULL END as category
            FROM budgets b
            LEFT JOIN categories c ON b.category_id = c.id
            WHERE b.user_id = $1 AND b.month = $2`,
           [userId, month]
         );
-        return res.status(200).json(budgets.rows.map(b => {
-          const amt = Number(b.amount);
-          const sp = Number(b.spent);
-          const rem = amt - sp;
-          const pct = amt > 0 ? (sp / amt) * 100 : 0;
-          return {
-            id: Number(b.id),
-            category_id: b.category_id ? Number(b.category_id) : null,
-            category: b.category,
-            amount: amt.toFixed(2),
+
+        const overallBudget = budgetsRes.rows.find(b => b.category_id === null);
+        let overallRow = null;
+        if (overallBudget) {
+          const bAmt = Number(overallBudget.amount);
+          const sp = totalMonthExpense;
+          const rem = bAmt - sp;
+          const pct = bAmt > 0 ? (sp / bAmt) * 100 : 0;
+          overallRow = {
+            id: Number(overallBudget.id),
+            category_id: null,
+            category: null,
+            amount: bAmt.toFixed(2),
             spent: sp.toFixed(2),
             remaining: rem.toFixed(2),
             percent: Number(pct.toFixed(1)),
-            level: pct >= 100 ? 'over' : pct >= 80 ? 'danger' : pct >= 50 ? 'warning' : 'safe'
+            level: pct >= 100 ? 'over' : pct >= 80 ? 'danger' : pct >= 50 ? 'warning' : 'safe',
+            is_recurring: Boolean(overallBudget.is_recurring),
           };
-        }));
+        }
+
+        let totalBudgeted = 0;
+        let budgetedSpentTotal = 0;
+        const categoryRows = budgetsRes.rows.filter(b => b.category_id !== null).map(b => {
+          const catId = Number(b.category_id);
+          const bAmt = Number(b.amount);
+          const sp = spentMap.get(catId) || 0;
+          totalBudgeted += bAmt;
+          budgetedSpentTotal += sp;
+          const rem = bAmt - sp;
+          const pct = bAmt > 0 ? (sp / bAmt) * 100 : 0;
+          return {
+            id: Number(b.id),
+            category_id: catId,
+            category: b.category,
+            amount: bAmt.toFixed(2),
+            spent: sp.toFixed(2),
+            remaining: rem.toFixed(2),
+            percent: Number(pct.toFixed(1)),
+            level: pct >= 100 ? 'over' : pct >= 80 ? 'danger' : pct >= 50 ? 'warning' : 'safe',
+            is_recurring: Boolean(b.is_recurring),
+          };
+        });
+
+        const unbudgetedSpent = Math.max(0, totalMonthExpense - budgetedSpentTotal);
+        const totalRemaining = totalBudgeted - budgetedSpentTotal;
+        const totalPercent = totalBudgeted > 0 ? (budgetedSpentTotal / totalBudgeted) * 100 : 0;
+
+        return res.status(200).json({
+          month,
+          overall: overallRow,
+          categories: categoryRows,
+          totals: {
+            budgeted: totalBudgeted.toFixed(2),
+            spent: budgetedSpentTotal.toFixed(2),
+            remaining: totalRemaining.toFixed(2),
+            percent: Number(totalPercent.toFixed(1)),
+            month_expense: totalMonthExpense.toFixed(2),
+            unbudgeted_spent: unbudgetedSpent.toFixed(2),
+          }
+        });
       }
       if (req.method === 'POST') {
-        const { category_id, month, amount, is_recurring } = req.body || {};
+        const { category_id, month: bMonth, amount, is_recurring } = req.body || {};
         const ins = await query(
           `INSERT INTO budgets (user_id, category_id, month, amount, is_recurring, created_at, updated_at)
            VALUES ($1, $2, $3, $4, COALESCE($5, true), NOW(), NOW())
            ON CONFLICT (user_id, category_id, month) 
            DO UPDATE SET amount = EXCLUDED.amount, is_recurring = EXCLUDED.is_recurring, updated_at = NOW()
            RETURNING *`,
-          [userId, category_id || null, month, amount, is_recurring]
+          [userId, category_id || null, bMonth || month, amount, is_recurring]
         );
         return res.status(200).json(ins.rows[0]);
       }
@@ -818,23 +947,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (req.method === 'GET') {
         const goals = await query(
           `SELECT g.*,
-            COALESCE((SELECT SUM(amount) FROM savings_contributions sc WHERE sc.savings_goal_id = g.id), 0) as current_amount
+            COALESCE((SELECT SUM(amount) FROM savings_contributions sc WHERE sc.savings_goal_id = g.id), 0) as saved_amount,
+            CASE WHEN a.id IS NOT NULL THEN json_build_object('id', a.id, 'name', a.name, 'balance', a.opening_balance::text) ELSE NULL END as account
            FROM savings_goals g
+           LEFT JOIN accounts a ON g.account_id = a.id
            WHERE g.user_id = $1
            ORDER BY g.priority ASC`,
           [userId]
         );
-        return res.status(200).json(goals.rows.map(g => {
+        const data = goals.rows.map(g => {
           const tgt = Number(g.target_amount);
-          const cur = Number(g.current_amount);
+          const cur = Number(g.saved_amount);
           return {
-            ...g,
             id: Number(g.id),
+            name: g.name,
             target_amount: tgt.toFixed(2),
-            current_amount: cur.toFixed(2),
-            percent: tgt > 0 ? Number(((cur / tgt) * 100).toFixed(1)) : 0,
+            saved_amount: cur.toFixed(2),
+            remaining: Math.max(0, tgt - cur).toFixed(2),
+            percent: tgt > 0 ? Number(Math.min(100, (cur / tgt) * 100).toFixed(1)) : 0,
+            deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
+            icon: g.icon,
+            color: g.color,
+            priority: Number(g.priority),
+            account_id: g.account_id ? Number(g.account_id) : null,
+            account: g.account,
+            notes: g.notes,
+            status: g.status,
+            required_per_month: null,
+            required_per_week: null,
+            months_left: null,
           };
-        }));
+        });
+        return res.status(200).json({ data });
       }
       if (req.method === 'POST') {
         const b = req.body || {};
@@ -843,7 +987,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NOW(), NOW()) RETURNING *`,
           [userId, b.account_id || null, b.name, b.target_amount, b.deadline || null, b.icon || 'target', b.color || '#16A34A', b.priority || 1, b.notes || null]
         );
-        return res.status(201).json({ ...ins.rows[0], id: Number(ins.rows[0].id), current_amount: '0.00', percent: 0 });
+        const g = ins.rows[0];
+        return res.status(201).json({
+          data: {
+            ...g,
+            id: Number(g.id),
+            saved_amount: '0.00',
+            remaining: Number(g.target_amount).toFixed(2),
+            percent: 0,
+          }
+        });
       }
     }
 
@@ -868,28 +1021,89 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 13. Debts API
     if (pathname === '/api/debts') {
+      const typeFilter = url.searchParams.get('type');
+      const statusFilter = url.searchParams.get('status');
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      const allDebtsRes = await query(
+        `SELECT d.*,
+          COALESCE((SELECT SUM(amount) FROM debt_payments dp WHERE dp.debt_id = d.id), 0) as paid_amount
+         FROM debts d
+         WHERE d.user_id = $1`,
+        [userId]
+      );
+
+      let debtRemaining = 0;
+      let recRemaining = 0;
+      let debtCount = 0;
+      let recCount = 0;
+      let overdueCount = 0;
+
+      allDebtsRes.rows.forEach(d => {
+        const rem = Math.max(0, Number(d.amount) - Number(d.paid_amount));
+        const isOverdue = Boolean(d.due_date && new Date(d.due_date).toISOString().slice(0, 10) < todayStr && d.status !== 'paid');
+        if (d.type === 'debt') {
+          debtRemaining += rem;
+          if (d.status !== 'paid') debtCount++;
+        } else {
+          recRemaining += rem;
+          if (d.status !== 'paid') recCount++;
+        }
+        if (isOverdue) overdueCount++;
+      });
+
       if (req.method === 'GET') {
+        let whereSql = 'd.user_id = $1';
+        let params: any[] = [userId];
+        if (typeFilter) {
+          params.push(typeFilter);
+          whereSql += ` AND d.type = $${params.length}`;
+        }
+        if (statusFilter) {
+          params.push(statusFilter);
+          whereSql += ` AND d.status = $${params.length}`;
+        }
+
         const debts = await query(
           `SELECT d.*,
             COALESCE((SELECT SUM(amount) FROM debt_payments dp WHERE dp.debt_id = d.id), 0) as paid_amount
            FROM debts d
-           WHERE d.user_id = $1
-           ORDER BY d.date DESC`,
-          [userId]
+           WHERE ${whereSql}
+           ORDER BY d.due_date ASC NULLS LAST, d.date DESC`,
+          params
         );
-        return res.status(200).json(debts.rows.map(d => {
+
+        const data = debts.rows.map(d => {
           const amt = Number(d.amount);
           const pd = Number(d.paid_amount);
-          const rem = amt - pd;
+          const rem = Math.max(0, amt - pd);
+          const isOverdue = Boolean(d.due_date && new Date(d.due_date).toISOString().slice(0, 10) < todayStr && d.status !== 'paid');
           return {
-            ...d,
             id: Number(d.id),
+            type: d.type,
+            party_name: d.party_name,
             amount: amt.toFixed(2),
             paid_amount: pd.toFixed(2),
-            remaining_amount: rem.toFixed(2),
-            percent: amt > 0 ? Number(((pd / amt) * 100).toFixed(1)) : 0,
+            remaining: rem.toFixed(2),
+            date: d.date ? new Date(d.date).toISOString().slice(0, 10) : null,
+            due_date: d.due_date ? new Date(d.due_date).toISOString().slice(0, 10) : null,
+            notes: d.notes,
+            status: d.status,
+            account_id: d.account_id ? Number(d.account_id) : null,
+            is_overdue: isOverdue,
           };
-        }));
+        });
+
+        return res.status(200).json({
+          data,
+          summary: {
+            debt_remaining: debtRemaining.toFixed(2),
+            receivable_remaining: recRemaining.toFixed(2),
+            debt_count: debtCount,
+            receivable_count: recCount,
+            overdue_count: overdueCount,
+          }
+        });
       }
       if (req.method === 'POST') {
         const b = req.body || {};
@@ -898,7 +1112,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'unpaid', NOW(), NOW()) RETURNING *`,
           [userId, b.account_id || null, b.type, b.party_name, b.amount, b.date, b.due_date || null, b.notes || null]
         );
-        return res.status(201).json({ ...ins.rows[0], id: Number(ins.rows[0].id), paid_amount: '0.00', remaining_amount: Number(b.amount).toFixed(2) });
+        const d = ins.rows[0];
+        return res.status(201).json({
+          data: {
+            ...d,
+            id: Number(d.id),
+            paid_amount: '0.00',
+            remaining: Number(b.amount).toFixed(2),
+            is_overdue: false,
+          }
+        });
       }
     }
 
@@ -916,21 +1139,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 14. Bills API
     if (pathname === '/api/bills') {
+      const todayStr = new Date().toISOString().slice(0, 10);
       if (req.method === 'GET') {
         const bills = await query(
           `SELECT b.*,
-            c.name as category_name
+            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon) ELSE NULL END as category,
+            CASE WHEN a.id IS NOT NULL THEN json_build_object('id', a.id, 'name', a.name) ELSE NULL END as account
            FROM bills b
            LEFT JOIN categories c ON b.category_id = c.id
-           WHERE b.user_id = $1 AND b.is_active = true
-           ORDER BY b.next_due_date ASC`,
+           LEFT JOIN accounts a ON b.account_id = a.id
+           WHERE b.user_id = $1
+           ORDER BY b.next_due_date ASC NULLS LAST`,
           [userId]
         );
-        return res.status(200).json(bills.rows.map(b => ({
-          ...b,
-          id: Number(b.id),
-          amount: Number(b.amount).toFixed(2),
-        })));
+        const data = bills.rows.map(b => {
+          const dueDate = b.next_due_date ? new Date(b.next_due_date).toISOString().slice(0, 10) : null;
+          const isOverdue = Boolean(dueDate && dueDate < todayStr);
+          return {
+            id: Number(b.id),
+            name: b.name,
+            amount: Number(b.amount).toFixed(2),
+            category_id: b.category_id ? Number(b.category_id) : null,
+            category: b.category,
+            account_id: b.account_id ? Number(b.account_id) : null,
+            account: b.account,
+            next_due_date: dueDate,
+            frequency: b.frequency,
+            reminder_days: Number(b.reminder_days || 3),
+            notes: b.notes,
+            is_active: Boolean(b.is_active),
+            status: isOverdue ? 'overdue' : 'unpaid',
+            days_until_due: null,
+            last_paid_date: null,
+          };
+        });
+        return res.status(200).json({ data });
       }
       if (req.method === 'POST') {
         const b = req.body || {};
@@ -939,7 +1182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, NOW(), NOW()) RETURNING *`,
           [userId, b.category_id || null, b.account_id || null, b.name, b.amount, b.next_due_date || null, b.frequency || 'monthly', b.reminder_days || 3, b.notes || null]
         );
-        return res.status(201).json({ ...ins.rows[0], id: Number(ins.rows[0].id) });
+        return res.status(201).json({ data: { ...ins.rows[0], id: Number(ins.rows[0].id) } });
       }
     }
 
@@ -959,26 +1202,241 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ message: 'Tagihan berhasil dibayar.' });
     }
 
-    // 15. Reports API
-    if (pathname.startsWith('/api/reports/')) {
-      const year = url.searchParams.get('year') || String(new Date().getFullYear());
-      if (pathname === '/api/reports/summary' || pathname === '/api/reports/cashflow') {
-        const summary = await query(
-          `SELECT to_char(date, 'YYYY-MM') as month, flow, SUM(amount) as total 
-           FROM transactions 
-           WHERE user_id = $1 AND type != 'transfer' AND to_char(date, 'YYYY') = $2
-           GROUP BY month, flow ORDER BY month ASC`,
-          [userId, year]
+    // Recurring API
+    if (pathname === '/api/recurring') {
+      if (req.method === 'GET') {
+        const recs = await query(
+          `SELECT r.*,
+            CASE WHEN a.id IS NOT NULL THEN json_build_object('id', a.id, 'name', a.name) ELSE NULL END as account,
+            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon) ELSE NULL END as category
+           FROM recurrings r
+           LEFT JOIN accounts a ON r.account_id = a.id
+           LEFT JOIN categories c ON r.category_id = c.id
+           WHERE r.user_id = $1
+           ORDER BY r.created_at DESC`,
+          [userId]
         );
-        return res.status(200).json(summary.rows);
+        const data = recs.rows.map(r => ({
+          ...r,
+          id: Number(r.id),
+          account_id: Number(r.account_id),
+          category_id: Number(r.category_id),
+          amount: Number(r.amount).toFixed(2),
+          interval: Number(r.interval || 1),
+          start_date: r.start_date ? new Date(r.start_date).toISOString().slice(0, 10) : null,
+          end_date: r.end_date ? new Date(r.end_date).toISOString().slice(0, 10) : null,
+          next_run_date: r.next_run_date ? new Date(r.next_run_date).toISOString().slice(0, 10) : null,
+          is_active: Boolean(r.is_active),
+          generated_count: Number(r.generated_count || 0),
+        }));
+        return res.status(200).json({ data });
       }
-      return res.status(200).json([]);
+    }
+
+    // Calendar API
+    if (pathname === '/api/calendar') {
+      const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      const [year, mNum] = month.split('-').map(Number);
+      const startOfMonth = `${month}-01`;
+      const lastDay = new Date(year, mNum, 0).getDate();
+      const endOfMonth = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+      const txs = await query(
+        `SELECT to_char(date, 'YYYY-MM-DD') as day, flow, SUM(amount) as total, COUNT(*) as count
+         FROM transactions
+         WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3
+         GROUP BY day, flow`,
+        [userId, startOfMonth, endOfMonth]
+      );
+
+      const days: Record<string, { income: string; expense: string; count: number }> = {};
+      txs.rows.forEach(r => {
+        if (!days[r.day]) {
+          days[r.day] = { income: '0.00', expense: '0.00', count: 0 };
+        }
+        if (r.flow === 'in') days[r.day].income = Number(r.total).toFixed(2);
+        if (r.flow === 'out') days[r.day].expense = Number(r.total).toFixed(2);
+        days[r.day].count += Number(r.count);
+      });
+
+      const bills = await query(
+        `SELECT b.* FROM bills b
+         WHERE b.user_id = $1 AND b.is_active = true AND b.next_due_date >= $2 AND b.next_due_date <= $3`,
+        [userId, startOfMonth, endOfMonth]
+      );
+
+      return res.status(200).json({
+        days,
+        bills: bills.rows.map(b => ({
+          bill_id: Number(b.id),
+          name: b.name,
+          date: new Date(b.next_due_date).toISOString().slice(0, 10),
+          amount: Number(b.amount).toFixed(2),
+          status: 'unpaid',
+        })),
+      });
+    }
+
+    // 15. Reports API
+    if (pathname === '/api/reports/cashflow') {
+      const now = new Date();
+      const dateTo = url.searchParams.get('date_to') || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+      const dFrom = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      const dateFrom = url.searchParams.get('date_from') || `${dFrom.getFullYear()}-${String(dFrom.getMonth() + 1).padStart(2, '0')}-01`;
+
+      const txs = await query(
+        `SELECT to_char(date, 'YYYY-MM') as month, flow, SUM(amount) as total
+         FROM transactions
+         WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3
+         GROUP BY month, flow
+         ORDER BY month ASC`,
+        [userId, dateFrom, dateTo]
+      );
+
+      const pointsMap = new Map<string, { income: number; expense: number }>();
+      txs.rows.forEach(r => {
+        if (!pointsMap.has(r.month)) pointsMap.set(r.month, { income: 0, expense: 0 });
+        const p = pointsMap.get(r.month)!;
+        if (r.flow === 'in') p.income += Number(r.total);
+        if (r.flow === 'out') p.expense += Number(r.total);
+      });
+
+      const data = Array.from(pointsMap.entries()).map(([period, v]) => ({
+        period,
+        label: period,
+        income: v.income.toFixed(2),
+        expense: v.expense.toFixed(2),
+        net: (v.income - v.expense).toFixed(2),
+      }));
+
+      return res.status(200).json({ data });
+    }
+
+    if (pathname === '/api/reports/summary') {
+      const now = new Date();
+      const dateFrom = url.searchParams.get('date_from') || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const dateTo = url.searchParams.get('date_to') || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+      const d1 = new Date(dateFrom);
+      const d2 = new Date(dateTo);
+      const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const months = Math.max(1, Math.round(days / 30));
+
+      const txs = await query(
+        `SELECT flow, SUM(amount) as total, COUNT(*) as count
+         FROM transactions
+         WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3
+         GROUP BY flow`,
+        [userId, dateFrom, dateTo]
+      );
+
+      let income = 0;
+      let expense = 0;
+      let txCount = 0;
+      txs.rows.forEach(r => {
+        if (r.flow === 'in') income += Number(r.total);
+        if (r.flow === 'out') expense += Number(r.total);
+        txCount += Number(r.count);
+      });
+      const net = income - expense;
+
+      // Expense by category
+      const expCat = await query(
+        `SELECT t.category_id, c.name, c.color, c.icon, SUM(t.amount) as total, COUNT(*) as count
+         FROM transactions t
+         LEFT JOIN categories c ON t.category_id = c.id
+         WHERE t.user_id = $1 AND t.flow = 'out' AND t.type != 'transfer' AND t.date >= $2 AND t.date <= $3
+         GROUP BY t.category_id, c.name, c.color, c.icon
+         ORDER BY total DESC`,
+        [userId, dateFrom, dateTo]
+      );
+
+      // Income by category
+      const incCat = await query(
+        `SELECT t.category_id, c.name, c.color, c.icon, SUM(t.amount) as total, COUNT(*) as count
+         FROM transactions t
+         LEFT JOIN categories c ON t.category_id = c.id
+         WHERE t.user_id = $1 AND t.flow = 'in' AND t.type != 'transfer' AND t.date >= $2 AND t.date <= $3
+         GROUP BY t.category_id, c.name, c.color, c.icon
+         ORDER BY total DESC`,
+        [userId, dateFrom, dateTo]
+      );
+
+      // By account
+      const byAcc = await query(
+        `SELECT a.id as account_id, a.name, a.color,
+           COALESCE(SUM(CASE WHEN t.flow = 'in' AND t.type != 'transfer' THEN t.amount ELSE 0 END), 0) as income,
+           COALESCE(SUM(CASE WHEN t.flow = 'out' AND t.type != 'transfer' THEN t.amount ELSE 0 END), 0) as expense
+         FROM accounts a
+         LEFT JOIN transactions t ON t.account_id = a.id AND t.date >= $2 AND t.date <= $3
+         WHERE a.user_id = $1
+         GROUP BY a.id, a.name, a.color`,
+        [userId, dateFrom, dateTo]
+      );
+
+      return res.status(200).json({
+        range: { date_from: dateFrom, date_to: dateTo, days, months },
+        income: income.toFixed(2),
+        expense: expense.toFixed(2),
+        net: net.toFixed(2),
+        savings_rate: income > 0 ? Number(((net / income) * 100).toFixed(1)) : null,
+        avg_daily_expense: (expense / days).toFixed(2),
+        avg_monthly_expense: (expense / months).toFixed(2),
+        transaction_count: txCount,
+        expense_by_category: expCat.rows.map(r => ({
+          category_id: r.category_id ? Number(r.category_id) : null,
+          name: r.name || 'Lainnya',
+          color: r.color || '#94A3B8',
+          icon: r.icon || 'tag',
+          total: Number(r.total).toFixed(2),
+          count: Number(r.count),
+          percent: expense > 0 ? Number(((Number(r.total) / expense) * 100).toFixed(1)) : 0,
+        })),
+        income_by_category: incCat.rows.map(r => ({
+          category_id: r.category_id ? Number(r.category_id) : null,
+          name: r.name || 'Lainnya',
+          color: r.color || '#94A3B8',
+          icon: r.icon || 'tag',
+          total: Number(r.total).toFixed(2),
+          count: Number(r.count),
+          percent: income > 0 ? Number(((Number(r.total) / income) * 100).toFixed(1)) : 0,
+        })),
+        by_account: byAcc.rows.map(r => {
+          const inc = Number(r.income);
+          const exp = Number(r.expense);
+          return {
+            account_id: Number(r.account_id),
+            name: r.name,
+            color: r.color,
+            income: inc.toFixed(2),
+            expense: exp.toFixed(2),
+            net: (inc - exp).toFixed(2),
+          };
+        }),
+      });
+    }
+
+    if (pathname === '/api/reports/balance-trend') {
+      return res.status(200).json({ data: [] });
+    }
+    if (pathname === '/api/reports/comparison') {
+      return res.status(200).json({ data: [], year: new Date().getFullYear() });
     }
 
     // 16. Notifications API
     if (pathname === '/api/notifications') {
-      const notifs = await query('SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [userId]);
-      return res.status(200).json(notifs.rows.map(n => ({ ...n, id: Number(n.id) })));
+      const notifs = await query('SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30', [userId]);
+      const unreadCount = notifs.rows.filter(n => !n.read_at).length;
+      return res.status(200).json({
+        data: notifs.rows.map(n => ({
+          ...n,
+          id: Number(n.id),
+          read_at: n.read_at ? new Date(n.read_at).toISOString() : null,
+          created_at: n.created_at ? new Date(n.created_at).toISOString() : null,
+        })),
+        unread_count: unreadCount,
+      });
     }
 
     // Default 404 for unknown API routes

@@ -6,6 +6,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useDashboard, useFinanceMutation } from '@/lib/queries'
+import type { Dashboard } from '@/types'
 import { api } from '@/lib/api'
 import { formatRupiah, formatPercent, greeting, monthKey } from '@/lib/format'
 import { Card, Badge, Progress, Skeleton } from '@/components/ui/primitives'
@@ -54,9 +55,38 @@ export function DashboardPage() {
     return <ErrorState message="Gagal memuat data dashboard" onRetry={() => refetch()} />
   }
 
-  const { total_balance, month, accounts, expense_by_category, budget, goals, upcoming_bills, recent_transactions } = data
+  const {
+    total_balance = '0.00',
+    month = {
+      income: '0.00',
+      expense: '0.00',
+      net: '0.00',
+      prev_income: '0.00',
+      prev_expense: '0.00',
+      prev_net: '0.00',
+      income_change_pct: null,
+      expense_change_pct: null,
+      net_change_pct: null,
+      savings_rate: null,
+      transaction_count: 0,
+    },
+    accounts = [],
+    expense_by_category = [],
+    budget = {
+      budgeted: '0.00',
+      spent: '0.00',
+      remaining: '0.00',
+      percent: 0,
+      has_budget: false,
+      over_count: 0,
+      warning_count: 0,
+    },
+    goals = [],
+    upcoming_bills = [],
+    recent_transactions = [],
+  } = (data || {}) as Dashboard
 
-  const isNetPositive = Number(month.net) >= 0
+  const isNetPositive = Number(month?.net ?? 0) >= 0
 
   return (
     <div className="space-y-6">
