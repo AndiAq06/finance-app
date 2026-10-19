@@ -1,12 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://postal-zoloft-characterized-species.trycloudflare.com/api/:path*"
+      "source": "/sanctum/(.*)",
+      "destination": "/api/index"
     },
     {
-      "source": "/sanctum/:path*",
-      "destination": "https://postal-zoloft-characterized-species.trycloudflare.com/sanctum/:path*"
+      "source": "/api/(.*)",
+      "destination": "/api/index"
     },
     {
       "source": "/(.*)",
