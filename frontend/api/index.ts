@@ -677,17 +677,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 10. Transactions API
-    if (pathname === '/api/transactions') {
+    if (pathname === '/api/transactions/export/csv') {
       if (req.method === 'GET') {
-        const page = Math.max(1, Number(url.searchParams.get('page') || 1));
-        const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get('per_page') || 20)));
-        const offset = (page - 1) * perPage;
-
         const accountId = url.searchParams.get('account_id');
         const categoryId = url.searchParams.get('category_id');
         const flow = url.searchParams.get('flow');
         const type = url.searchParams.get('type');
-        const search = url.searchParams.get('search');
+        const search = url.searchParams.get('q') || url.searchParams.get('search');
         const startDate = url.searchParams.get('start_date');
         const endDate = url.searchParams.get('end_date');
 
@@ -695,11 +691,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let params: any[] = [userId];
 
         if (accountId) {
-          params.push(accountId);
+          params.push(Number(accountId));
           whereClauses.push(`t.account_id = $${params.length}`);
         }
         if (categoryId) {
-          params.push(categoryId);
+          params.push(Number(categoryId));
           whereClauses.push(`t.category_id = $${params.length}`);
         }
         if (flow) {
@@ -720,7 +716,101 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         if (search) {
           params.push(`%${search.trim().toLowerCase()}%`);
-          whereClauses.push(`(LOWER(t.description) LIKE $${params.length} OR LOWER(COALESCE(t.counterparty, '')) LIKE $${params.length})`);
+          whereClauses.push(`(
+            LOWER(COALESCE(t.description, '')) LIKE $${params.length} OR 
+            LOWER(COALESCE(t.counterparty, '')) LIKE $${params.length} OR 
+            LOWER(COALESCE(t.notes, '')) LIKE $${params.length} OR 
+            LOWER(a.name) LIKE $${params.length} OR 
+            LOWER(COALESCE(c.name, '')) LIKE $${params.length}
+          )`);
+        }
+
+        const whereSql = whereClauses.join(' AND ');
+        const txRes = await query(
+          `SELECT t.*, a.name as account_name, c.name as category_name
+           FROM transactions t
+           JOIN accounts a ON t.account_id = a.id
+           LEFT JOIN categories c ON t.category_id = c.id
+           WHERE ${whereSql}
+           ORDER BY t.date DESC, t.id DESC`,
+          params
+        );
+
+        let csv = '\uFEFFID,Tanggal,Tipe,Arus,Akun,Kategori,Nominal,Deskripsi,Pihak Lain,Catatan\r\n';
+        for (const t of txRes.rows) {
+          const d = t.date ? new Date(t.date).toISOString().slice(0, 10) : '';
+          const flowLabel = t.flow === 'in' ? 'Masuk' : 'Keluar';
+          const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+          csv += [
+            t.id,
+            d,
+            t.type,
+            flowLabel,
+            escapeCsv(t.account_name),
+            escapeCsv(t.category_name),
+            Number(t.amount).toFixed(2),
+            escapeCsv(t.description),
+            escapeCsv(t.counterparty),
+            escapeCsv(t.notes),
+          ].join(',') + '\r\n';
+        }
+
+        res.setHeader('Content-Type', 'text/csv; charset=UTF-8');
+        res.setHeader('Content-Disposition', `attachment; filename="finora_transaksi_${new Date().toISOString().slice(0, 10)}.csv"`);
+        return res.status(200).send(csv);
+      }
+    }
+
+    if (pathname === '/api/transactions') {
+      if (req.method === 'GET') {
+        const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+        const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get('per_page') || 20)));
+        const offset = (page - 1) * perPage;
+
+        const accountId = url.searchParams.get('account_id');
+        const categoryId = url.searchParams.get('category_id');
+        const flow = url.searchParams.get('flow');
+        const type = url.searchParams.get('type');
+        const search = url.searchParams.get('q') || url.searchParams.get('search');
+        const startDate = url.searchParams.get('start_date');
+        const endDate = url.searchParams.get('end_date');
+
+        let whereClauses = ['t.user_id = $1'];
+        let params: any[] = [userId];
+
+        if (accountId) {
+          params.push(Number(accountId));
+          whereClauses.push(`t.account_id = $${params.length}`);
+        }
+        if (categoryId) {
+          params.push(Number(categoryId));
+          whereClauses.push(`t.category_id = $${params.length}`);
+        }
+        if (flow) {
+          params.push(flow);
+          whereClauses.push(`t.flow = $${params.length}`);
+        }
+        if (type) {
+          params.push(type);
+          whereClauses.push(`t.type = $${params.length}`);
+        }
+        if (startDate) {
+          params.push(startDate);
+          whereClauses.push(`t.date >= $${params.length}`);
+        }
+        if (endDate) {
+          params.push(endDate);
+          whereClauses.push(`t.date <= $${params.length}`);
+        }
+        if (search) {
+          params.push(`%${search.trim().toLowerCase()}%`);
+          whereClauses.push(`(
+            LOWER(COALESCE(t.description, '')) LIKE $${params.length} OR 
+            LOWER(COALESCE(t.counterparty, '')) LIKE $${params.length} OR 
+            LOWER(COALESCE(t.notes, '')) LIKE $${params.length} OR 
+            LOWER(a.name) LIKE $${params.length} OR 
+            LOWER(COALESCE(c.name, '')) LIKE $${params.length}
+          )`);
         }
 
         const whereSql = whereClauses.join(' AND ');
@@ -730,7 +820,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `SELECT COUNT(*) as total,
             COALESCE(SUM(CASE WHEN t.flow = 'in' AND t.type != 'transfer' THEN t.amount ELSE 0 END), 0) as income,
             COALESCE(SUM(CASE WHEN t.flow = 'out' AND t.type != 'transfer' THEN t.amount ELSE 0 END), 0) as expense
-           FROM transactions t WHERE ${whereSql}`,
+           FROM transactions t
+           JOIN accounts a ON t.account_id = a.id
+           LEFT JOIN categories c ON t.category_id = c.id
+           WHERE ${whereSql}`,
           params
         );
         const total = Number(countRes.rows[0].total);
@@ -742,7 +835,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `SELECT t.*,
             json_build_object('id', a.id, 'name', a.name, 'color', a.color, 'icon', a.icon, 'type', a.type) as account,
             CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon, 'type', c.type) ELSE NULL END as category,
-            CASE WHEN tr.id IS NOT NULL THEN json_build_object('id', tr.id, 'from_account_id', tr.from_account_id, 'to_account_id', tr.to_account_id) ELSE NULL END as transfer
+            CASE WHEN tr.id IS NOT NULL THEN json_build_object(
+              'id', tr.id,
+              'from_account_id', tr.from_account_id,
+              'to_account_id', tr.to_account_id,
+              'from_account', (SELECT name FROM accounts WHERE id = tr.from_account_id),
+              'to_account', (SELECT name FROM accounts WHERE id = tr.to_account_id)
+            ) ELSE NULL END as transfer
            FROM transactions t
            JOIN accounts a ON t.account_id = a.id
            LEFT JOIN categories c ON t.category_id = c.id
@@ -757,6 +856,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           data: txRes.rows.map(t => ({
             ...t,
             id: Number(t.id),
+            date: t.date ? new Date(t.date).toISOString().slice(0, 10) : null,
             amount: Number(t.amount).toFixed(2),
             account_id: Number(t.account_id),
             category_id: t.category_id ? Number(t.category_id) : null,
@@ -1722,6 +1822,200 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const txAttachMatch = pathname.match(/^\/api\/transactions\/(\d+)\/attachment$/);
     if (txAttachMatch && req.method === 'POST') {
       return res.status(200).json({ message: 'Lampiran berhasil diunggah.' });
+    }
+
+    // 17. Global Search API
+    if (pathname === '/api/search') {
+      if (req.method === 'GET') {
+        const q = (url.searchParams.get('q') || '').trim();
+        if (q.length < 2) {
+          return res.status(200).json({
+            transactions: [],
+            accounts: [],
+            categories: [],
+            goals: [],
+            bills: [],
+            debts: [],
+          });
+        }
+
+        const term = `%${q.toLowerCase()}%`;
+
+        // 1. Transactions
+        const txRes = await query(
+          `SELECT t.*,
+            json_build_object('id', a.id, 'name', a.name, 'color', a.color, 'icon', a.icon, 'type', a.type) as account,
+            CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'name', c.name, 'color', c.color, 'icon', c.icon, 'type', c.type) ELSE NULL END as category
+           FROM transactions t
+           JOIN accounts a ON t.account_id = a.id
+           LEFT JOIN categories c ON t.category_id = c.id
+           WHERE t.user_id = $1 AND (
+             LOWER(COALESCE(t.description, '')) LIKE $2 OR
+             LOWER(COALESCE(t.notes, '')) LIKE $2 OR
+             LOWER(COALESCE(t.counterparty, '')) LIKE $2 OR
+             LOWER(a.name) LIKE $2 OR
+             LOWER(COALESCE(c.name, '')) LIKE $2
+           )
+           ORDER BY t.date DESC, t.id DESC
+           LIMIT 15`,
+          [userId, term]
+        );
+
+        // 2. Accounts
+        const accRes = await query(
+          `SELECT a.*,
+            (a.opening_balance + 
+             COALESCE((SELECT SUM(amount) FROM transactions t WHERE t.account_id = a.id AND t.flow = 'in'), 0) -
+             COALESCE((SELECT SUM(amount) FROM transactions t WHERE t.account_id = a.id AND t.flow = 'out'), 0)
+            ) as balance
+           FROM accounts a
+           WHERE a.user_id = $1 AND LOWER(a.name) LIKE $2
+           ORDER BY a.name ASC
+           LIMIT 5`,
+          [userId, term]
+        );
+
+        // 3. Categories
+        const catRes = await query(
+          `SELECT * FROM categories
+           WHERE user_id = $1 AND LOWER(name) LIKE $2
+           ORDER BY name ASC
+           LIMIT 5`,
+          [userId, term]
+        );
+
+        // 4. Savings Goals
+        const goalsRes = await query(
+          `SELECT g.*,
+            COALESCE((SELECT SUM(amount) FROM savings_contributions sc WHERE sc.savings_goal_id = g.id), 0) as saved_amount
+           FROM savings_goals g
+           WHERE g.user_id = $1 AND LOWER(g.name) LIKE $2
+           ORDER BY g.deadline ASC NULLS LAST
+           LIMIT 5`,
+          [userId, term]
+        );
+
+        // 5. Bills
+        const billsRes = await query(
+          `SELECT * FROM bills
+           WHERE user_id = $1 AND (
+             LOWER(name) LIKE $2 OR
+             LOWER(COALESCE(notes, '')) LIKE $2
+           )
+           ORDER BY next_due_date ASC NULLS LAST
+           LIMIT 5`,
+          [userId, term]
+        );
+
+        // 6. Debts
+        const debtsRes = await query(
+          `SELECT d.*,
+            COALESCE((SELECT SUM(amount) FROM debt_payments dp WHERE dp.debt_id = d.id), 0) as paid_amount
+           FROM debts d
+           WHERE d.user_id = $1 AND (
+             LOWER(d.party_name) LIKE $2 OR
+             LOWER(COALESCE(d.notes, '')) LIKE $2
+           )
+           ORDER BY d.due_date ASC NULLS LAST
+           LIMIT 5`,
+          [userId, term]
+        );
+
+        return res.status(200).json({
+          transactions: txRes.rows.map(t => ({
+            id: Number(t.id),
+            type: t.type,
+            flow: t.flow,
+            date: t.date ? new Date(t.date).toISOString().slice(0, 10) : null,
+            amount: Number(t.amount).toFixed(2),
+            description: t.description,
+            notes: t.notes,
+            counterparty: t.counterparty,
+            account_id: Number(t.account_id),
+            category_id: t.category_id ? Number(t.category_id) : null,
+            account: t.account,
+            category: t.category,
+            transfer: null,
+            has_attachment: Boolean(t.has_attachment),
+            attachment_name: t.attachment_name,
+            recurring_id: t.recurring_id ? Number(t.recurring_id) : null,
+            debt_id: t.debt_id ? Number(t.debt_id) : null,
+            bill_id: t.bill_id ? Number(t.bill_id) : null,
+            locked_reason: t.locked_reason,
+            created_at: t.created_at,
+          })),
+          accounts: accRes.rows.map(a => ({
+            id: Number(a.id),
+            name: a.name,
+            type: a.type,
+            opening_balance: Number(a.opening_balance).toFixed(2),
+            start_date: a.start_date ? new Date(a.start_date).toISOString().slice(0, 10) : null,
+            color: a.color,
+            icon: a.icon,
+            is_active: Boolean(a.is_active),
+            notes: a.notes,
+            balance: Number(a.balance).toFixed(2),
+          })),
+          categories: catRes.rows.map(c => ({
+            id: Number(c.id),
+            name: c.name,
+            type: c.type,
+            icon: c.icon,
+            color: c.color,
+            is_default: Boolean(c.is_default),
+          })),
+          goals: goalsRes.rows.map(g => {
+            const target = Number(g.target_amount);
+            const saved = Number(g.saved_amount);
+            const percent = target > 0 ? Math.min(100, Math.round((saved / target) * 100)) : 0;
+            return {
+              id: Number(g.id),
+              name: g.name,
+              target_amount: target.toFixed(2),
+              saved_amount: saved.toFixed(2),
+              remaining: Math.max(0, target - saved).toFixed(2),
+              percent,
+              deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
+              icon: g.icon,
+              color: g.color,
+              priority: Number(g.priority),
+              account_id: g.account_id ? Number(g.account_id) : null,
+              notes: g.notes,
+              status: g.status,
+            };
+          }),
+          bills: billsRes.rows.map(b => ({
+            id: Number(b.id),
+            name: b.name,
+            amount: Number(b.amount).toFixed(2),
+            category_id: b.category_id ? Number(b.category_id) : null,
+            account_id: b.account_id ? Number(b.account_id) : null,
+            next_due_date: b.next_due_date ? new Date(b.next_due_date).toISOString().slice(0, 10) : null,
+            frequency: b.frequency,
+            reminder_days: Number(b.reminder_days),
+            notes: b.notes,
+            is_active: Boolean(b.is_active),
+            status: b.status,
+          })),
+          debts: debtsRes.rows.map(d => {
+            const amt = Number(d.amount);
+            const paid = Number(d.paid_amount || 0);
+            return {
+              id: Number(d.id),
+              type: d.type,
+              party_name: d.party_name,
+              amount: amt.toFixed(2),
+              paid_amount: paid.toFixed(2),
+              remaining: Math.max(0, amt - paid).toFixed(2),
+              date: d.date ? new Date(d.date).toISOString().slice(0, 10) : null,
+              due_date: d.due_date ? new Date(d.due_date).toISOString().slice(0, 10) : null,
+              notes: d.notes,
+              status: d.status,
+              account_id: d.account_id ? Number(d.account_id) : null,
+            };
+          }),
+        });
+      }
     }
 
     // Default 404 for unknown API routes

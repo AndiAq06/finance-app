@@ -17,12 +17,22 @@ export function SearchModal({
   onOpenChange: (open: boolean) => void
 }) {
   const [query, setQuery] = React.useState('')
+  const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const navigate = useNavigate()
-  const { data, isLoading } = useSearch(query)
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const { data, isLoading } = useSearch(debouncedQuery)
 
   const handleSelect = (path: string) => {
     onOpenChange(false)
     setQuery('')
+    setDebouncedQuery('')
     navigate(path)
   }
 

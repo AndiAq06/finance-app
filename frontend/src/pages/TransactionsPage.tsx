@@ -19,12 +19,21 @@ import type { Transaction } from '@/types'
 export function TransactionsPage() {
   const [page, setPage] = React.useState(1)
   const [q, setQ] = React.useState('')
+  const [debouncedQ, setDebouncedQ] = React.useState('')
   const [type, setType] = React.useState<string>('')
   const [accountId, setAccountId] = React.useState<string>('')
   const [categoryId, setCategoryId] = React.useState<string>('')
   const [startDate, setStartDate] = React.useState<string>('')
   const [endDate, setEndDate] = React.useState<string>('')
   const [showFilters, setShowFilters] = React.useState(false)
+
+  // Debounce search query
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQ(q)
+    }, 250)
+    return () => clearTimeout(handler)
+  }, [q])
 
   const [modalOpen, setModalOpen] = React.useState(false)
   const [importOpen, setImportOpen] = React.useState(false)
@@ -38,14 +47,14 @@ export function TransactionsPage() {
   const queryParams = React.useMemo(
     () => ({
       page,
-      q: q || undefined,
+      q: debouncedQ || undefined,
       type: type || undefined,
       account_id: accountId || undefined,
       category_id: categoryId || undefined,
       start_date: startDate || undefined,
       end_date: endDate || undefined,
     }),
-    [page, q, type, accountId, categoryId, startDate, endDate],
+    [page, debouncedQ, type, accountId, categoryId, startDate, endDate],
   )
 
   const { data, isLoading } = useTransactions(queryParams)
@@ -240,6 +249,7 @@ export function TransactionsPage() {
               size="sm"
               onClick={() => {
                 setQ('')
+                setDebouncedQ('')
                 setType('')
                 setAccountId('')
                 setCategoryId('')
