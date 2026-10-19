@@ -1145,6 +1145,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ message: 'Anggaran dihapus.' });
     }
 
+    // Helper to calculate goal periodic targets
+    function calculateGoalMetrics(g: any, includeContributions: boolean = false, contributions: any[] = []) {
+      const tgt = Number(g.target_amount);
+      const cur = Number(g.saved_amount || 0);
+      const rem = Math.max(0, tgt - cur);
+      const pct = tgt > 0 ? Number(Math.min(100, (cur / tgt) * 100).toFixed(1)) : 0;
+
+      let monthsLeft: number | null = null;
+      let reqPerMonth: string | null = null;
+      let reqPerWeek: string | null = null;
+
+      if (g.deadline) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const deadline = new Date(g.deadline);
+        deadline.setHours(0, 0, 0, 0);
+
+        if (deadline > today) {
+          let months = (deadline.getFullYear() - today.getFullYear()) * 12 + (deadline.getMonth() - today.getMonth());
+          const anchor = new Date(today);
+          anchor.setMonth(anchor.getMonth() + months);
+          if (anchor > deadline) {
+            months--;
+            anchor.setMonth(anchor.getMonth() - 1);
+          }
+          const daysInMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+          const remDays = (deadline.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24);
+          const floatMonths = Math.max(0.1, months + (remDays / daysInMonth));
+          const floatWeeks = Math.max(0.1, (deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 7));
+
+          monthsLeft = Math.max(1, Math.round(floatMonths));
+          if (rem > 0) {
+            reqPerMonth = (rem / floatMonths).toFixed(2);
+            reqPerWeek = (rem / floatWeeks).toFixed(2);
+          }
+        }
+      }
+
+      const res: any = {
+        id: Number(g.id),
+        name: g.name,
+        target_amount: tgt.toFixed(2),
+        saved_amount: cur.toFixed(2),
+        remaining: rem.toFixed(2),
+        percent: pct,
+        deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
+        icon: g.icon,
+        color: g.color,
+        priority: Number(g.priority),
+        account_id: g.account_id ? Number(g.account_id) : null,
+        account: g.account,
+        notes: g.notes,
+        status: g.status,
+        required_per_month: reqPerMonth,
+        required_per_week: reqPerWeek,
+        months_left: monthsLeft,
+      };
+
+      if (includeContributions) {
+        res.contributions = contributions.map(c => ({
+          id: Number(c.id),
+          type: c.type,
+          amount: Number(c.amount).toFixed(2),
+          date: c.date ? new Date(c.date).toISOString().slice(0, 10) : null,
+          note: c.note,
+          created_at: c.created_at ? new Date(c.created_at).toISOString() : null,
+        }));
+      }
+
+      return res;
+    }
+
     // 12. Goals API
     if (pathname === '/api/goals') {
       if (req.method === 'GET') {
@@ -1158,29 +1230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            ORDER BY g.priority ASC`,
           [userId]
         );
-        const data = goals.rows.map(g => {
-          const tgt = Number(g.target_amount);
-          const cur = Number(g.saved_amount);
-          return {
-            id: Number(g.id),
-            name: g.name,
-            target_amount: tgt.toFixed(2),
-            saved_amount: cur.toFixed(2),
-            remaining: Math.max(0, tgt - cur).toFixed(2),
-            percent: tgt > 0 ? Number(Math.min(100, (cur / tgt) * 100).toFixed(1)) : 0,
-            deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
-            icon: g.icon,
-            color: g.color,
-            priority: Number(g.priority),
-            account_id: g.account_id ? Number(g.account_id) : null,
-            account: g.account,
-            notes: g.notes,
-            status: g.status,
-            required_per_month: null,
-            required_per_week: null,
-            months_left: null,
-          };
-        });
+        const data = goals.rows.map(g => calculateGoalMetrics(g));
         return res.status(200).json({ data });
       }
       if (req.method === 'POST') {
@@ -1192,13 +1242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
         const g = ins.rows[0];
         return res.status(201).json({
-          data: {
-            ...g,
-            id: Number(g.id),
-            saved_amount: '0.00',
-            remaining: Number(g.target_amount).toFixed(2),
-            percent: 0,
-          }
+          data: calculateGoalMetrics(g)
         });
       }
     }
@@ -1237,18 +1281,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
         if (goal.rows.length === 0) return res.status(404).json({ message: 'Target tabungan tidak ditemukan.' });
         const g = goal.rows[0];
-        const tgt = Number(g.target_amount);
-        const cur = Number(g.saved_amount);
+        const contribs = await query(
+          `SELECT * FROM savings_contributions WHERE savings_goal_id = $1 AND user_id = $2 ORDER BY date DESC, id DESC`,
+          [gId, userId]
+        );
         return res.status(200).json({
-          data: {
-            ...g,
-            id: Number(g.id),
-            target_amount: tgt.toFixed(2),
-            saved_amount: cur.toFixed(2),
-            remaining: Math.max(0, tgt - cur).toFixed(2),
-            percent: tgt > 0 ? Number(Math.min(100, (cur / tgt) * 100).toFixed(1)) : 0,
-            deadline: g.deadline ? new Date(g.deadline).toISOString().slice(0, 10) : null,
-          }
+          data: calculateGoalMetrics(g, true, contribs.rows)
         });
       }
       if (req.method === 'PUT') {
