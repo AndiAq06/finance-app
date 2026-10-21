@@ -83,6 +83,7 @@ export function TransactionModal({
       if (type === 'transfer') {
         const payload = {
           type: 'transfer',
+          account_id: Number(accountId),
           from_account_id: Number(accountId),
           to_account_id: Number(toAccountId),
           amount: Number(amount),

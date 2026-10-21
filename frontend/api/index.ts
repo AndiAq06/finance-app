@@ -878,26 +878,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (req.method === 'POST') {
         const b = req.body || {};
-        const { type, account_id, to_account_id, category_id, date, amount, description, counterparty, notes } = b;
+        const { type, account_id, from_account_id, to_account_id, category_id, date, amount, description, counterparty, notes } = b;
 
         if (type === 'transfer') {
+          const fromAccId = from_account_id || account_id;
+          const toAccId = to_account_id;
+
+          if (!fromAccId || !toAccId) {
+            return res.status(422).json({ message: 'Rekening asal dan tujuan harus dipilih.' });
+          }
+          if (Number(fromAccId) === Number(toAccId)) {
+            return res.status(422).json({ message: 'Rekening asal dan tujuan tidak boleh sama.' });
+          }
+
+          const fromAcc = await query('SELECT name FROM accounts WHERE id = $1 AND user_id = $2', [fromAccId, userId]);
+          const toAcc = await query('SELECT name FROM accounts WHERE id = $1 AND user_id = $2', [toAccId, userId]);
+          const fromName = fromAcc.rows[0]?.name || 'Rekening';
+          const toName = toAcc.rows[0]?.name || 'Rekening';
+
           // Double entry transfer
           const fromTx = await query(
             `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, notes, created_at, updated_at)
              VALUES ($1, $2, NULL, 'transfer', 'out', $3, $4, $5, $6, NOW(), NOW()) RETURNING *`,
-            [userId, account_id, date, amount, description || 'Transfer Keluar', notes || null]
+            [userId, fromAccId, date, amount, description || `Transfer ke ${toName}`, notes || null]
           );
           const toTx = await query(
             `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, notes, created_at, updated_at)
              VALUES ($1, $2, NULL, 'transfer', 'in', $3, $4, $5, $6, NOW(), NOW()) RETURNING *`,
-            [userId, to_account_id, date, amount, description || 'Transfer Masuk', notes || null]
+            [userId, toAccId, date, amount, description || `Transfer dari ${fromName}`, notes || null]
           );
           await query(
             `INSERT INTO transfers (user_id, from_account_id, to_account_id, from_transaction_id, to_transaction_id, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-            [userId, account_id, to_account_id, fromTx.rows[0].id, toTx.rows[0].id]
+            [userId, fromAccId, toAccId, fromTx.rows[0].id, toTx.rows[0].id]
           );
-          return res.status(201).json(fromTx.rows[0]);
+
+          return res.status(201).json({
+            data: {
+              ...fromTx.rows[0],
+              id: Number(fromTx.rows[0].id),
+              date: fromTx.rows[0].date ? new Date(fromTx.rows[0].date).toISOString().slice(0, 10) : null,
+              amount: Number(fromTx.rows[0].amount).toFixed(2),
+              account_id: Number(fromTx.rows[0].account_id),
+              category_id: null,
+            }
+          });
         }
 
         const flow = type === 'income' ? 'in' : 'out';
@@ -906,7 +931,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) RETURNING *`,
           [userId, account_id, category_id || null, type, flow, date, amount, description || null, counterparty || null, notes || null]
         );
-        return res.status(201).json(ins.rows[0]);
+        return res.status(201).json({
+          data: {
+            ...ins.rows[0],
+            id: Number(ins.rows[0].id),
+            date: ins.rows[0].date ? new Date(ins.rows[0].date).toISOString().slice(0, 10) : null,
+            amount: Number(ins.rows[0].amount).toFixed(2),
+            account_id: Number(ins.rows[0].account_id),
+            category_id: ins.rows[0].category_id ? Number(ins.rows[0].category_id) : null,
+          }
+        });
       }
     }
 
@@ -942,7 +976,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (req.method === 'PUT') {
         const b = req.body || {};
-        const { account_id, category_id, date, amount, description, notes, counterparty } = b;
+        const { account_id, from_account_id, to_account_id, category_id, date, amount, description, notes, counterparty } = b;
 
         // Check if transaction exists
         const txCheck = await query('SELECT * FROM transactions WHERE id = $1 AND user_id = $2', [txId, userId]);
@@ -950,18 +984,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const curTx = txCheck.rows[0];
 
         if (curTx.type === 'transfer') {
-          // If transfer, update date, amount, notes on both
+          const fromAccId = from_account_id || account_id;
+          const toAccId = to_account_id;
+
+          // If transfer, update date, amount, notes, and accounts on both
           const trRes = await query('SELECT * FROM transfers WHERE from_transaction_id = $1 OR to_transaction_id = $1', [txId]);
           if (trRes.rows.length > 0) {
             const tr = trRes.rows[0];
+            const newFromAccId = fromAccId || tr.from_account_id;
+            const newToAccId = toAccId || tr.to_account_id;
+
+            const fromAcc = await query('SELECT name FROM accounts WHERE id = $1 AND user_id = $2', [newFromAccId, userId]);
+            const toAcc = await query('SELECT name FROM accounts WHERE id = $1 AND user_id = $2', [newToAccId, userId]);
+            const fromName = fromAcc.rows[0]?.name || 'Rekening';
+            const toName = toAcc.rows[0]?.name || 'Rekening';
+
+            // Update out transaction
             await query(
               `UPDATE transactions SET 
-                date = COALESCE($1, date),
-                amount = COALESCE($2, amount),
-                notes = $3,
+                account_id = $1,
+                date = COALESCE($2, date),
+                amount = COALESCE($3, amount),
+                description = $4,
+                notes = $5,
                 updated_at = NOW()
-               WHERE id IN ($4, $5)`,
-              [date, amount, notes !== undefined ? notes : null, tr.from_transaction_id, tr.to_transaction_id]
+               WHERE id = $6`,
+              [newFromAccId, date, amount, description || `Transfer ke ${toName}`, notes !== undefined ? notes : null, tr.from_transaction_id]
+            );
+
+            // Update in transaction
+            await query(
+              `UPDATE transactions SET 
+                account_id = $1,
+                date = COALESCE($2, date),
+                amount = COALESCE($3, amount),
+                description = $4,
+                notes = $5,
+                updated_at = NOW()
+               WHERE id = $6`,
+              [newToAccId, date, amount, description || `Transfer dari ${fromName}`, notes !== undefined ? notes : null, tr.to_transaction_id]
+            );
+
+            // Update transfer record
+            await query(
+              `UPDATE transfers SET 
+                from_account_id = $1,
+                to_account_id = $2,
+                updated_at = NOW()
+               WHERE id = $3`,
+              [newFromAccId, newToAccId, tr.id]
             );
           }
         } else {
