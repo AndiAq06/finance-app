@@ -3,5 +3,10 @@
   "private": true,
   "scripts": {
     "build": "cd frontend && npm install && npm run build"
+  },
+  "dependencies": {
+    "pg": "^8.23.1",
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3"
   }
 }
