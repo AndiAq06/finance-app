@@ -1,11 +1,13 @@
+import type { ComponentType } from 'react'
 import {
   Wallet, Landmark, Smartphone, PiggyBank, CreditCard, Briefcase, Laptop, TrendingUp, Gift, Store, Sparkles,
   Utensils, Car, ShoppingBag, Receipt, HeartPulse, Clapperboard, GraduationCap, Home, Users, CircleDot,
   Plane, Shield, Bike, Baby, Dumbbell, Coffee, Fuel, Wifi, Zap, Droplets, Phone, Music, Gamepad2, Shirt,
   BookOpen, Banknote, Coins, HandCoins, Target, Tag, Building2, Bus, Stethoscope, PawPrint, Smile,
-  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+export type LucideIcon = ComponentType<any>
 
 /** Registry ikon yang dapat dipilih pengguna untuk kategori, akun, dan target. */
 export const ICONS: Record<string, LucideIcon> = {
