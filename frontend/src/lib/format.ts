@@ -1,5 +1,7 @@
-import { format as fnsFormat, parseISO, isValid } from 'date-fns'
+import { format as fnsFormat, isValid } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
+
+const parseISO = (s: string) => new Date(s)
 
 /**
  * Semua nominal dari API dikirim sebagai string desimal (mis. "1250000.00")

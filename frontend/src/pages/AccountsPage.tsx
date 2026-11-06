@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { PlusCircle, Landmark, Edit2, Trash2 } from 'lucide-react'
+import { PlusCircle, Landmark, Edit2, Trash2, RotateCcw } from 'lucide-react'
 import { useAccounts, useFinanceMutation } from '@/lib/queries'
 import { api } from '@/lib/api'
 import { formatRupiah, todayISO } from '@/lib/format'
@@ -11,7 +11,8 @@ import { IconBadge, IconPicker, ColorPicker } from '@/components/ui/icons'
 import type { Account, AccountType } from '@/types'
 
 export function AccountsPage() {
-  const { data, isLoading } = useAccounts(true)
+  const [showInactive, setShowInactive] = React.useState(false)
+  const { data, isLoading } = useAccounts(showInactive)
   const [modalOpen, setModalOpen] = React.useState(false)
   const [editAccount, setEditAccount] = React.useState<Account | null>(null)
   const [deleteAccount, setDeleteAccount] = React.useState<Account | null>(null)
@@ -75,6 +76,13 @@ export function AccountsPage() {
     },
   )
 
+  const reactivateMutation = useFinanceMutation(
+    (id: number) => api.put(`/accounts/${id}`, { is_active: true }),
+    {
+      success: 'Rekening berhasil diaktifkan kembali',
+    },
+  )
+
   const accounts = data?.data ?? []
   const totalBalance = data?.total_balance ?? '0'
 
@@ -89,16 +97,28 @@ export function AccountsPage() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => {
-            setEditAccount(null)
-            setModalOpen(true)
-          }}
-          className="gap-1.5 justify-center h-10 w-full sm:w-auto shadow-sm"
-        >
-          <PlusCircle className="size-4" /> Tambah Rekening
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-fg-muted cursor-pointer select-none bg-surface-2 px-3 py-2 rounded-xl border border-border hover:border-primary/50 transition-colors">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              className="size-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+            />
+            <span>Tampilkan Rekening Nonaktif</span>
+          </label>
+
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditAccount(null)
+              setModalOpen(true)
+            }}
+            className="gap-1.5 justify-center h-10 w-full sm:w-auto shadow-sm"
+          >
+            <PlusCircle className="size-4" /> Tambah Rekening
+          </Button>
+        </div>
       </div>
 
       {/* Net Worth Highlight Card */}
@@ -159,25 +179,40 @@ export function AccountsPage() {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => {
-                        setEditAccount(acc)
-                        setModalOpen(true)
-                      }}
-                      title="Edit Rekening"
-                    >
-                      <Edit2 className="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="danger-ghost"
-                      size="icon-sm"
-                      onClick={() => setDeleteAccount(acc)}
-                      title="Hapus / Nonaktifkan"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    {!acc.is_active ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-primary"
+                        onClick={() => reactivateMutation.mutate(acc.id)}
+                        loading={reactivateMutation.isPending}
+                        title="Aktifkan Kembali Rekening"
+                      >
+                        <RotateCcw className="size-3" /> Pulihkan
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            setEditAccount(acc)
+                            setModalOpen(true)
+                          }}
+                          title="Edit Rekening"
+                        >
+                          <Edit2 className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="danger-ghost"
+                          size="icon-sm"
+                          onClick={() => setDeleteAccount(acc)}
+                          title="Hapus / Nonaktifkan"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
 

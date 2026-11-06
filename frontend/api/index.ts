@@ -48,6 +48,163 @@ function setAuthCookie(res: VercelResponse, user: { id: number; email: string },
   res.setHeader('Set-Cookie', [tokenCookie, xsrfCookie]);
 }
 
+function addCycle(dateStr: string, frequency: string, interval = 1): string {
+  const parts = dateStr.slice(0, 10).split('-').map(Number);
+  const year = parts[0];
+  const month = parts[1] - 1; // 0-indexed
+  const day = parts[2];
+  const d = new Date(year, month, day);
+
+  if (frequency === 'daily') {
+    d.setDate(d.getDate() + interval);
+  } else if (frequency === 'weekly') {
+    d.setDate(d.getDate() + 7 * interval);
+  } else if (frequency === 'yearly') {
+    d.setFullYear(d.getFullYear() + interval);
+  } else {
+    d.setMonth(d.getMonth() + interval);
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dayNum}`;
+}
+
+async function processDueBillsAndRecurring(userId: number) {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+
+  // 1. Process Due Bills
+  try {
+    const dueBills = await query(
+      `SELECT b.*
+       FROM bills b
+       WHERE b.user_id = $1 AND b.is_active = true
+         AND b.next_due_date IS NOT NULL
+         AND b.next_due_date <= CURRENT_DATE
+       ORDER BY b.next_due_date ASC`,
+      [userId]
+    );
+
+    for (const b of dueBills.rows) {
+      const bId = Number(b.id);
+      const dueDate = new Date(b.next_due_date).toISOString().slice(0, 10);
+
+      const existingPay = await query(
+        `SELECT id FROM bill_payments WHERE bill_id = $1 AND period_due_date = $2`,
+        [bId, dueDate]
+      );
+
+      if (existingPay.rows.length === 0) {
+        let accId = b.account_id ? Number(b.account_id) : null;
+        if (accId) {
+          const accCheck = await query('SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true', [accId, userId]);
+          if (accCheck.rows.length === 0) accId = null;
+        }
+        if (!accId) {
+          const firstAcc = await query('SELECT id FROM accounts WHERE user_id = $1 AND is_active = true ORDER BY id ASC LIMIT 1', [userId]);
+          if (firstAcc.rows.length > 0) accId = Number(firstAcc.rows[0].id);
+        }
+
+        if (accId) {
+          const txRes = await query(
+            `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, bill_id, created_at, updated_at)
+             VALUES ($1, $2, $3, 'expense', 'out', $4, $5, $6, $7, NOW(), NOW()) RETURNING id`,
+            [userId, accId, b.category_id || null, dueDate, b.amount, `Pembayaran Otomatis: ${b.name}`, bId]
+          );
+          const txId = Number(txRes.rows[0].id);
+
+          await query(
+            `INSERT INTO bill_payments (bill_id, user_id, transaction_id, period_due_date, paid_date, amount, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+            [bId, userId, txId, dueDate, dueDate, b.amount]
+          );
+
+          await query(
+            `INSERT INTO notifications (user_id, type, title, body, link, severity, created_at, updated_at)
+             VALUES ($1, 'bill_paid', $2, $3, '/bills', 'info', NOW(), NOW())`,
+            [userId, 'Tagihan Otomatis Terbayar', `Tagihan "${b.name}" sebesar Rp ${Number(b.amount).toLocaleString('id-ID')} otomatis dibayarkan dan dicatat pada transaksi.`]
+          );
+        }
+      }
+
+      let nextDue = addCycle(dueDate, b.frequency || 'monthly');
+      while (nextDue <= todayStr) {
+        nextDue = addCycle(nextDue, b.frequency || 'monthly');
+      }
+
+      await query(
+        `UPDATE bills SET next_due_date = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+        [nextDue, bId, userId]
+      );
+    }
+  } catch (err) {
+    console.error('Error processing due bills:', err);
+  }
+
+  // 2. Process Recurring Transactions
+  try {
+    const dueRecurrings = await query(
+      `SELECT r.*
+       FROM recurrings r
+       WHERE r.user_id = $1 AND r.is_active = true
+         AND r.next_run_date IS NOT NULL
+         AND r.next_run_date <= CURRENT_DATE
+       ORDER BY r.next_run_date ASC`,
+      [userId]
+    );
+
+    for (const r of dueRecurrings.rows) {
+      const rId = Number(r.id);
+      const runDate = new Date(r.next_run_date).toISOString().slice(0, 10);
+
+      let accId = Number(r.account_id);
+      const accCheck = await query('SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true', [accId, userId]);
+      if (accCheck.rows.length === 0) {
+        const firstAcc = await query('SELECT id FROM accounts WHERE user_id = $1 AND is_active = true ORDER BY id ASC LIMIT 1', [userId]);
+        if (firstAcc.rows.length > 0) accId = Number(firstAcc.rows[0].id);
+        else continue;
+      }
+
+      const flow = r.type === 'income' ? 'in' : 'out';
+
+      await query(
+        `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, recurring_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+        [userId, accId, r.category_id || null, r.type, flow, runDate, r.amount, r.description, rId]
+      );
+
+      let nextRun = addCycle(runDate, r.frequency || 'monthly', Number(r.interval || 1));
+      let isActive = true;
+      if (r.end_date && nextRun > new Date(r.end_date).toISOString().slice(0, 10)) {
+        isActive = false;
+      }
+
+      await query(
+        `UPDATE recurrings SET
+           generated_count = COALESCE(generated_count, 0) + 1,
+           last_run_date = CURRENT_DATE,
+           next_run_date = $1,
+           is_active = $2,
+           updated_at = NOW()
+         WHERE id = $3 AND user_id = $4`,
+        [nextRun, isActive, rId, userId]
+      );
+
+      await query(
+        `INSERT INTO notifications (user_id, type, title, body, link, severity, created_at, updated_at)
+         VALUES ($1, 'recurring_run', $2, $3, '/transactions', 'info', NOW(), NOW())`,
+        [userId, 'Transaksi Rutin Tercatat', `Transaksi terjadwal "${r.description}" otomatis dicatat ke transaksi.`]
+      );
+    }
+  } catch (err) {
+    console.error('Error processing recurring transactions:', err);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS & Preflight
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -192,6 +349,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = authUser.id;
 
+    // Auto-process due bills & recurring transactions on relevant views
+    if (['/api/bills', '/api/dashboard', '/api/transactions', '/api/calendar', '/api/recurring'].some(p => pathname.startsWith(p))) {
+      await processDueBillsAndRecurring(userId);
+    }
+
     // 5. Auth: Me
     if (pathname === '/api/auth/me' && req.method === 'GET') {
       const userRes = await query('SELECT id, name, email, is_demo, created_at FROM users WHERE id = $1', [userId]);
@@ -306,18 +468,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `UPDATE accounts SET 
             name = COALESCE($1, name),
             type = COALESCE($2, type),
-            color = COALESCE($3, color),
-            icon = COALESCE($4, icon),
-            notes = $5,
+            opening_balance = COALESCE($3, opening_balance),
+            start_date = COALESCE($4, start_date),
+            color = COALESCE($5, color),
+            icon = COALESCE($6, icon),
+            notes = $7,
+            is_active = COALESCE($8, is_active),
             updated_at = NOW()
-           WHERE id = $6 AND user_id = $7 RETURNING *`,
-          [b.name, b.type, b.color, b.icon, b.notes !== undefined ? b.notes : null, accId, userId]
+           WHERE id = $9 AND user_id = $10 RETURNING *`,
+          [
+            b.name,
+            b.type,
+            b.opening_balance !== undefined && b.opening_balance !== null && b.opening_balance !== '' ? Number(b.opening_balance) : null,
+            b.start_date || null,
+            b.color,
+            b.icon,
+            b.notes !== undefined ? b.notes : null,
+            b.is_active !== undefined ? Boolean(b.is_active) : null,
+            accId,
+            userId
+          ]
         );
         return res.status(200).json(upd.rows[0]);
       }
       if (req.method === 'DELETE') {
-        await query('UPDATE accounts SET is_active = false, updated_at = NOW() WHERE id = $1 AND user_id = $2', [accId, userId]);
-        return res.status(200).json({ message: 'Rekening dinonaktifkan.' });
+        const txCountRes = await query('SELECT COUNT(*) as count FROM transactions WHERE account_id = $1', [accId]);
+        const txCount = Number(txCountRes.rows[0]?.count || 0);
+        if (txCount === 0) {
+          await query('DELETE FROM accounts WHERE id = $1 AND user_id = $2', [accId, userId]);
+          return res.status(200).json({ message: 'Rekening berhasil dihapus permanen.' });
+        } else {
+          await query('UPDATE accounts SET is_active = false, updated_at = NOW() WHERE id = $1 AND user_id = $2', [accId, userId]);
+          return res.status(200).json({ message: 'Rekening dinonaktifkan karena memiliki riwayat transaksi.' });
+        }
       }
     }
 
@@ -759,6 +942,119 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.setHeader('Content-Disposition', `attachment; filename="finora_transaksi_${new Date().toISOString().slice(0, 10)}.csv"`);
         return res.status(200).send(csv);
       }
+    }
+
+    if (pathname === '/api/transactions/import/csv' && req.method === 'POST') {
+      let body = req.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch {}
+      }
+      const defaultAccountId = Number(body?.default_account_id || url.searchParams.get('default_account_id'));
+      const csvContent = body?.csv_content || (typeof body === 'string' ? body : '');
+
+      if (!defaultAccountId) {
+        return res.status(422).json({ message: 'Rekening tujuan wajib dipilih.' });
+      }
+
+      const accRes = await query('SELECT id FROM accounts WHERE id = $1 AND user_id = $2', [defaultAccountId, userId]);
+      if (accRes.rows.length === 0) {
+        return res.status(404).json({ message: 'Rekening tujuan tidak ditemukan.' });
+      }
+
+      if (!csvContent || typeof csvContent !== 'string') {
+        return res.status(422).json({ message: 'File atau konten CSV tidak valid.' });
+      }
+
+      const lines = csvContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        return res.status(422).json({ message: 'CSV kosong atau tidak memiliki baris data.' });
+      }
+
+      const parseCsvLine = (line: string): string[] => {
+        const result: string[] = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              cur += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            result.push(cur.trim());
+            cur = '';
+          } else {
+            cur += char;
+          }
+        }
+        result.push(cur.trim());
+        return result;
+      };
+
+      const header = parseCsvLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+      const dateCol = header.findIndex(h => h.includes('tanggal') || h.includes('date'));
+      const amountCol = header.findIndex(h => h.includes('nominal') || h.includes('amount') || h.includes('jumlah'));
+      const typeCol = header.findIndex(h => h.includes('tipe') || h.includes('type'));
+      const flowCol = header.findIndex(h => h.includes('arus') || h.includes('flow'));
+      const descCol = header.findIndex(h => h.includes('deskripsi') || h.includes('description') || h.includes('keterangan'));
+      const catCol = header.findIndex(h => h.includes('kategori') || h.includes('category'));
+      const notesCol = header.findIndex(h => h.includes('catatan') || h.includes('notes'));
+
+      const catsRes = await query('SELECT id, LOWER(name) as name, type FROM categories WHERE user_id = $1 OR user_id IS NULL', [userId]);
+      const catsMap = new Map<string, number>();
+      catsRes.rows.forEach(c => catsMap.set(c.name.trim(), Number(c.id)));
+
+      let importedCount = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCsvLine(lines[i]);
+        if (row.length === 0 || row.every(c => !c)) continue;
+
+        let rawDate = dateCol >= 0 ? row[dateCol] : '';
+        let dateVal = new Date().toISOString().slice(0, 10);
+        if (rawDate) {
+          const parsedD = new Date(rawDate);
+          if (!isNaN(parsedD.getTime())) {
+            dateVal = parsedD.toISOString().slice(0, 10);
+          }
+        }
+
+        let rawAmount = amountCol >= 0 ? row[amountCol] : '0';
+        let numAmount = Math.abs(parseFloat(rawAmount.replace(/[^0-9.-]/g, '')) || 0);
+        if (numAmount <= 0) continue;
+
+        let rawFlow = flowCol >= 0 ? row[flowCol].toLowerCase() : '';
+        let rawType = typeCol >= 0 ? row[typeCol].toLowerCase() : '';
+        let flow: 'in' | 'out' = 'out';
+        let type: 'income' | 'expense' = 'expense';
+
+        if (rawFlow === 'in' || rawFlow === 'masuk' || rawType === 'income' || rawType === 'pemasukan') {
+          flow = 'in';
+          type = 'income';
+        } else {
+          flow = 'out';
+          type = 'expense';
+        }
+
+        let desc = descCol >= 0 ? row[descCol] : '';
+        let note = notesCol >= 0 ? row[notesCol] : '';
+        let catName = catCol >= 0 ? row[catCol].toLowerCase().trim() : '';
+        let catId = catName && catsMap.has(catName) ? catsMap.get(catName) : null;
+
+        await query(
+          `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, notes, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+          [userId, defaultAccountId, catId, type, flow, dateVal, numAmount, desc || 'Transaksi Impor', note || null]
+        );
+        importedCount++;
+      }
+
+      return res.status(200).json({
+        message: `Berhasil mengimpor ${importedCount} transaksi.`,
+        imported_count: importedCount
+      });
     }
 
     if (pathname === '/api/transactions') {
@@ -1495,13 +1791,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const debtPayMatch = pathname.match(/^\/api\/debts\/(\d+)\/pay$/);
     if (debtPayMatch && req.method === 'POST') {
       const dId = Number(debtPayMatch[1]);
-      const { amount, date, note, account_id } = req.body || {};
+      const { amount, date, note, account_id, create_transaction } = req.body || {};
+      const debtRes = await query('SELECT * FROM debts WHERE id = $1 AND user_id = $2', [dId, userId]);
+      if (debtRes.rows.length === 0) return res.status(404).json({ message: 'Hutang/piutang tidak ditemukan.' });
+      const d = debtRes.rows[0];
+
+      const pDate = date || new Date().toISOString().slice(0, 10);
+      const payAmount = Number(amount || 0);
+
+      let txId: number | null = null;
+      if (create_transaction !== false && account_id) {
+        const flow = d.type === 'debt' ? 'out' : 'in';
+        const type = d.type === 'debt' ? 'expense' : 'income';
+        const desc = d.type === 'debt' ? `Bayar hutang ke ${d.party_name}` : `Terima bayar piutang dari ${d.party_name}`;
+
+        const insTx = await query(
+          `INSERT INTO transactions (user_id, account_id, type, flow, date, amount, description, notes, counterparty, debt_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) RETURNING id`,
+          [userId, Number(account_id), type, flow, pDate, payAmount, desc, note || null, d.party_name, dId]
+        );
+        txId = Number(insTx.rows[0].id);
+      }
+
       await query(
-        `INSERT INTO debt_payments (debt_id, user_id, account_id, amount, date, note, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-        [dId, userId, account_id || null, amount, date || new Date().toISOString().slice(0, 10), note || null]
+        `INSERT INTO debt_payments (debt_id, user_id, account_id, transaction_id, amount, date, note, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+        [dId, userId, account_id ? Number(account_id) : null, txId, payAmount, pDate, note || null]
       );
-      return res.status(200).json({ message: 'Pembayaran dicatat.' });
+
+      const totalPaidRes = await query('SELECT SUM(amount) as total FROM debt_payments WHERE debt_id = $1', [dId]);
+      const totalPaid = Number(totalPaidRes.rows[0]?.total || 0);
+      const debtAmt = Number(d.amount);
+      const newStatus = totalPaid >= debtAmt ? 'paid' : (totalPaid > 0 ? 'partial' : 'unpaid');
+
+      await query('UPDATE debts SET status = $1, updated_at = NOW() WHERE id = $2', [newStatus, dId]);
+
+      return res.status(200).json({ message: 'Pembayaran berhasil dicatat & saldo diperbarui.', status: newStatus });
     }
 
     const debtMatch = pathname.match(/^\/api\/debts\/(\d+)$/);
@@ -1589,17 +1914,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const billPayMatch = pathname.match(/^\/api\/bills\/(\d+)\/pay$/);
     if (billPayMatch && req.method === 'POST') {
       const bId = Number(billPayMatch[1]);
-      const { account_id, date, amount } = req.body || {};
+      const { account_id, paid_date, date, amount, create_transaction } = req.body || {};
       const billRes = await query('SELECT * FROM bills WHERE id = $1 AND user_id = $2', [bId, userId]);
       if (billRes.rows.length === 0) return res.status(404).json({ message: 'Tagihan tidak ditemukan.' });
       const b = billRes.rows[0];
 
+      const pDate = paid_date || date || new Date().toISOString().slice(0, 10);
+      const payAmount = Number(amount || b.amount);
+      const periodDueDate = b.next_due_date ? new Date(b.next_due_date).toISOString().slice(0, 10) : pDate;
+
+      // Find target account (account_id > b.account_id > first active account)
+      let accId = account_id ? Number(account_id) : (b.account_id ? Number(b.account_id) : null);
+      if (accId) {
+        const accCheck = await query('SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true', [accId, userId]);
+        if (accCheck.rows.length === 0) accId = null;
+      }
+      if (!accId) {
+        const firstAcc = await query('SELECT id FROM accounts WHERE user_id = $1 AND is_active = true ORDER BY id ASC LIMIT 1', [userId]);
+        if (firstAcc.rows.length > 0) accId = Number(firstAcc.rows[0].id);
+      }
+
+      let txId: number | null = null;
+      if (create_transaction !== false && accId) {
+        const insTx = await query(
+          `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, bill_id, created_at, updated_at)
+           VALUES ($1, $2, $3, 'expense', 'out', $4, $5, $6, $7, NOW(), NOW()) RETURNING id`,
+          [userId, accId, b.category_id || null, pDate, payAmount, `Bayar tagihan: ${b.name}`, bId]
+        );
+        txId = Number(insTx.rows[0].id);
+      }
+
       await query(
-        `INSERT INTO bill_payments (bill_id, user_id, period_due_date, paid_date, amount, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-        [bId, userId, b.next_due_date || date, date || new Date().toISOString().slice(0, 10), amount || b.amount]
+        `INSERT INTO bill_payments (bill_id, user_id, transaction_id, period_due_date, paid_date, amount, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+        [bId, userId, txId, periodDueDate, pDate, payAmount]
       );
-      return res.status(200).json({ message: 'Tagihan berhasil dibayar.' });
+
+      // Advance next_due_date
+      let nextDue = addCycle(periodDueDate, b.frequency || 'monthly');
+      const todayStr = new Date().toISOString().slice(0, 10);
+      while (nextDue <= todayStr) {
+        nextDue = addCycle(nextDue, b.frequency || 'monthly');
+      }
+
+      await query(
+        `UPDATE bills SET next_due_date = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
+        [nextDue, bId, userId]
+      );
+
+      return res.status(200).json({
+        message: 'Tagihan berhasil dibayar & tercatat di transaksi.',
+        transaction_id: txId,
+        next_due_date: nextDue
+      });
     }
 
     const billMatch = pathname.match(/^\/api\/bills\/(\d+)$/);
@@ -1707,7 +2074,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (pathname === '/api/recurring/run-pending' && req.method === 'POST') {
-      return res.status(200).json({ message: 'Transaksi tertunda telah diproses.', generated: 0 });
+      await processDueBillsAndRecurring(userId);
+      return res.status(200).json({ message: 'Semua transaksi rutin dan tagihan jatuh tempo berhasil diproses.', generated: 1 });
     }
 
     // Calendar API
@@ -1895,10 +2263,127 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (pathname === '/api/reports/balance-trend') {
-      return res.status(200).json({ data: [] });
+      const monthsCount = Math.max(1, Math.min(24, Number(url.searchParams.get('months') || 6)));
+      const now = new Date();
+      const endYear = now.getFullYear();
+      const endMonth = now.getMonth();
+
+      const accRes = await query('SELECT opening_balance FROM accounts WHERE user_id = $1 AND is_active = true', [userId]);
+      let openingTotal = 0;
+      accRes.rows.forEach(a => openingTotal += Number(a.opening_balance));
+
+      const startDate = new Date(endYear, endMonth - monthsCount + 1, 1);
+      const startStr = startDate.toISOString().slice(0, 10);
+      const endStr = new Date(endYear, endMonth + 1, 0).toISOString().slice(0, 10);
+
+      const priorTx = await query(
+        `SELECT flow, SUM(amount) as total
+         FROM transactions
+         WHERE user_id = $1 AND date < $2
+         GROUP BY flow`,
+        [userId, startStr]
+      );
+      let runningBalance = openingTotal;
+      priorTx.rows.forEach(r => {
+        if (r.flow === 'in') runningBalance += Number(r.total);
+        if (r.flow === 'out') runningBalance -= Number(r.total);
+      });
+
+      const periodTxs = await query(
+        `SELECT to_char(date, 'YYYY-MM') as month_key, flow, SUM(amount) as total
+         FROM transactions
+         WHERE user_id = $1 AND date >= $2 AND date <= $3
+         GROUP BY month_key, flow
+         ORDER BY month_key ASC`,
+        [userId, startStr, endStr]
+      );
+      const monthMap = new Map<string, { in: number; out: number }>();
+      periodTxs.rows.forEach(r => {
+        const k = r.month_key;
+        if (!monthMap.has(k)) monthMap.set(k, { in: 0, out: 0 });
+        const obj = monthMap.get(k)!;
+        if (r.flow === 'in') obj.in += Number(r.total);
+        if (r.flow === 'out') obj.out += Number(r.total);
+      });
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const data: { period: string; label: string; balance: string }[] = [];
+
+      for (let m = 0; m < monthsCount; m++) {
+        const curD = new Date(endYear, endMonth - monthsCount + 1 + m, 1);
+        const y = curD.getFullYear();
+        const mon = curD.getMonth();
+        const mKey = `${y}-${String(mon + 1).padStart(2, '0')}`;
+        const label = `${monthNames[mon]} ${y}`;
+
+        const mData = monthMap.get(mKey) || { in: 0, out: 0 };
+        runningBalance += (mData.in - mData.out);
+
+        data.push({
+          period: mKey,
+          label,
+          balance: runningBalance.toFixed(2),
+        });
+      }
+
+      return res.status(200).json({ data });
     }
+
     if (pathname === '/api/reports/comparison') {
-      return res.status(200).json({ data: [], year: new Date().getFullYear() });
+      const year = Number(url.searchParams.get('year') || new Date().getFullYear());
+      const prevYear = year - 1;
+
+      const txCurrent = await query(
+        `SELECT to_char(date, 'MM') as m, flow, SUM(amount) as total
+         FROM transactions
+         WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3
+         GROUP BY m, flow`,
+        [userId, `${year}-01-01`, `${year}-12-31`]
+      );
+
+      const txPrev = await query(
+        `SELECT to_char(date, 'MM') as m, flow, SUM(amount) as total
+         FROM transactions
+         WHERE user_id = $1 AND type != 'transfer' AND date >= $2 AND date <= $3
+         GROUP BY m, flow`,
+        [userId, `${prevYear}-01-01`, `${prevYear}-12-31`]
+      );
+
+      const curMap = new Map<string, { inc: number; exp: number }>();
+      txCurrent.rows.forEach(r => {
+        const m = r.m;
+        if (!curMap.has(m)) curMap.set(m, { inc: 0, exp: 0 });
+        const obj = curMap.get(m)!;
+        if (r.flow === 'in') obj.inc += Number(r.total);
+        if (r.flow === 'out') obj.exp += Number(r.total);
+      });
+
+      const prevMap = new Map<string, { inc: number; exp: number }>();
+      txPrev.rows.forEach(r => {
+        const m = r.m;
+        if (!prevMap.has(m)) prevMap.set(m, { inc: 0, exp: 0 });
+        const obj = prevMap.get(m)!;
+        if (r.flow === 'in') obj.inc += Number(r.total);
+        if (r.flow === 'out') obj.exp += Number(r.total);
+      });
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const data = [];
+      for (let i = 1; i <= 12; i++) {
+        const mStr = String(i).padStart(2, '0');
+        const c = curMap.get(mStr) || { inc: 0, exp: 0 };
+        const p = prevMap.get(mStr) || { inc: 0, exp: 0 };
+        data.push({
+          month: i,
+          label: monthNames[i - 1],
+          income: c.inc.toFixed(2),
+          expense: c.exp.toFixed(2),
+          prev_income: p.inc.toFixed(2),
+          prev_expense: p.exp.toFixed(2),
+        });
+      }
+
+      return res.status(200).json({ data, year });
     }
 
     // 16. Notifications API

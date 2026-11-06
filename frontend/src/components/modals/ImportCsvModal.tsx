@@ -34,11 +34,11 @@ export function ImportCsvModal({ open, onOpenChange, onSuccess }: ImportCsvModal
   const importMutation = useFinanceMutation(
     async () => {
       if (!selectedFile || !accountId) return
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('default_account_id', accountId)
-
-      const res = (await api.post('/transactions/import/csv', formData)) as {
+      const text = await selectedFile.text()
+      const res = (await api.post('/transactions/import/csv', {
+        default_account_id: Number(accountId),
+        csv_content: text,
+      })) as {
         message: string
         imported_count: number
       }
