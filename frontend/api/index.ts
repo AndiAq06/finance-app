@@ -1513,7 +1513,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Helper to calculate goal periodic targets
-    function calculateGoalMetrics(g: any, includeContributions: boolean = false, contributions: any[] = []) {
+    const calculateGoalMetrics = (g: any, includeContributions: boolean = false, contributions: any[] = []) => {
       const tgt = Number(g.target_amount);
       const cur = Number(g.saved_amount || 0);
       const rem = Math.max(0, tgt - cur);
