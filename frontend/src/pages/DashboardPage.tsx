@@ -89,13 +89,13 @@ export function DashboardPage() {
   const isNetPositive = Number(month?.net ?? 0) >= 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
       {/* Top Banner / Welcome greeting */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-lg sm:text-xl font-bold tracking-tight text-fg">{greeting()} 👋</span>
-            <Badge tone="primary" className="gap-1 text-xs">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-base sm:text-xl font-bold tracking-tight text-fg">{greeting()} 👋</span>
+            <Badge tone="primary" className="gap-1 text-xs shrink-0">
               <Sparkles className="size-3" /> Ringkasan
             </Badge>
           </div>
@@ -104,7 +104,7 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center w-full sm:w-auto">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center w-full sm:w-auto shrink-0">
           <Button
             variant="secondary"
             size="sm"
@@ -112,7 +112,7 @@ export function DashboardPage() {
               setTxType('transfer')
               setTxModalOpen(true)
             }}
-            className="gap-1.5 justify-center h-9"
+            className="gap-1.5 justify-center h-9 text-xs"
           >
             <ArrowRightLeft className="size-3.5" /> Transfer
           </Button>
@@ -123,7 +123,7 @@ export function DashboardPage() {
               setTxType('expense')
               setTxModalOpen(true)
             }}
-            className="gap-1.5 shadow-sm justify-center h-9"
+            className="gap-1.5 shadow-sm justify-center h-9 text-xs"
           >
             <PlusCircle className="size-4" /> Transaksi
           </Button>
@@ -131,35 +131,35 @@ export function DashboardPage() {
       </div>
 
       {/* Main Metric Cards (2x2 on mobile, 4 cols on desktop) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 min-w-0">
         {/* Total Saldo */}
-        <Card className="p-3.5 sm:p-5 relative overflow-hidden bg-gradient-to-br from-surface to-surface-2 border-border/80">
-          <div className="flex items-center justify-between">
+        <Card className="p-3 sm:p-5 relative overflow-hidden bg-gradient-to-br from-surface to-surface-2 border-border/80 min-w-0">
+          <div className="flex items-center justify-between gap-1">
             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-fg-subtle truncate">Kekayaan Bersih</span>
-            <span className="grid size-7 sm:size-9 place-items-center rounded-xl bg-primary-soft text-primary shrink-0">
-              <Wallet className="size-3.5 sm:size-4" />
+            <span className="grid size-6 sm:size-9 place-items-center rounded-lg sm:rounded-xl bg-primary-soft text-primary shrink-0">
+              <Wallet className="size-3 sm:size-4" />
             </span>
           </div>
-          <p className="mt-2 sm:mt-3 text-base sm:text-2xl font-black tabular tracking-tight text-fg truncate">
+          <p className="mt-1.5 sm:mt-3 text-sm sm:text-2xl font-black tabular tracking-tight text-fg truncate">
             {formatRupiah(total_balance)}
           </p>
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] sm:text-xs text-fg-muted truncate">
+          <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-xs text-fg-muted truncate">
             <span>{accounts.length} rekening</span>
           </div>
         </Card>
 
         {/* Pemasukan Bulan Ini */}
-        <Card className="p-3.5 sm:p-5">
-          <div className="flex items-center justify-between">
+        <Card className="p-3 sm:p-5 min-w-0">
+          <div className="flex items-center justify-between gap-1">
             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-fg-subtle truncate">Pemasukan</span>
-            <span className="grid size-7 sm:size-9 place-items-center rounded-xl bg-income-soft text-income shrink-0">
-              <ArrowDownRight className="size-3.5 sm:size-4" />
+            <span className="grid size-6 sm:size-9 place-items-center rounded-lg sm:rounded-xl bg-income-soft text-income shrink-0">
+              <ArrowDownRight className="size-3 sm:size-4" />
             </span>
           </div>
-          <p className="mt-2 sm:mt-3 text-base sm:text-2xl font-bold tabular tracking-tight text-income truncate">
+          <p className="mt-1.5 sm:mt-3 text-sm sm:text-2xl font-bold tabular tracking-tight text-income truncate">
             +{formatRupiah(month.income)}
           </p>
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] sm:text-xs truncate">
+          <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-xs truncate">
             {month.income_change_pct !== null && (
               <span className={`font-semibold ${month.income_change_pct >= 0 ? 'text-income' : 'text-expense'}`}>
                 {month.income_change_pct >= 0 ? '+' : ''}
@@ -171,17 +171,17 @@ export function DashboardPage() {
         </Card>
 
         {/* Pengeluaran Bulan Ini */}
-        <Card className="p-3.5 sm:p-5">
-          <div className="flex items-center justify-between">
+        <Card className="p-3 sm:p-5 min-w-0">
+          <div className="flex items-center justify-between gap-1">
             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-fg-subtle truncate">Pengeluaran</span>
-            <span className="grid size-7 sm:size-9 place-items-center rounded-xl bg-expense-soft text-expense shrink-0">
-              <ArrowUpRight className="size-3.5 sm:size-4" />
+            <span className="grid size-6 sm:size-9 place-items-center rounded-lg sm:rounded-xl bg-expense-soft text-expense shrink-0">
+              <ArrowUpRight className="size-3 sm:size-4" />
             </span>
           </div>
-          <p className="mt-2 sm:mt-3 text-base sm:text-2xl font-bold tabular tracking-tight text-expense truncate">
+          <p className="mt-1.5 sm:mt-3 text-sm sm:text-2xl font-bold tabular tracking-tight text-expense truncate">
             -{formatRupiah(month.expense)}
           </p>
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] sm:text-xs truncate">
+          <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-xs truncate">
             {month.expense_change_pct !== null && (
               <span className={`font-semibold ${month.expense_change_pct <= 0 ? 'text-income' : 'text-expense'}`}>
                 {month.expense_change_pct >= 0 ? '+' : ''}
@@ -193,21 +193,21 @@ export function DashboardPage() {
         </Card>
 
         {/* Selisih Bersih (Cashflow) */}
-        <Card className="p-3.5 sm:p-5">
-          <div className="flex items-center justify-between">
+        <Card className="p-3 sm:p-5 min-w-0">
+          <div className="flex items-center justify-between gap-1">
             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-fg-subtle truncate">Arus Kas</span>
             <span
-              className={`grid size-7 sm:size-9 place-items-center rounded-xl shrink-0 ${
+              className={`grid size-6 sm:size-9 place-items-center rounded-lg sm:rounded-xl shrink-0 ${
                 isNetPositive ? 'bg-primary-soft text-primary' : 'bg-expense-soft text-expense'
               }`}
             >
-              {isNetPositive ? <TrendingUp className="size-3.5 sm:size-4" /> : <TrendingDown className="size-3.5 sm:size-4" />}
+              {isNetPositive ? <TrendingUp className="size-3 sm:size-4" /> : <TrendingDown className="size-3 sm:size-4" />}
             </span>
           </div>
-          <p className={`mt-2 sm:mt-3 text-base sm:text-2xl font-bold tabular tracking-tight truncate ${isNetPositive ? 'text-fg' : 'text-expense'}`}>
+          <p className={`mt-1.5 sm:mt-3 text-sm sm:text-2xl font-bold tabular tracking-tight truncate ${isNetPositive ? 'text-fg' : 'text-expense'}`}>
             {formatRupiah(month.net, { sign: true })}
           </p>
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] sm:text-xs text-fg-muted truncate">
+          <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-xs text-fg-muted truncate">
             <span>Simpanan:</span>
             <span className="font-bold text-fg">{formatPercent(month.savings_rate)}</span>
           </div>
@@ -215,23 +215,24 @@ export function DashboardPage() {
       </div>
 
       {/* Middle Grid: Expense Breakdown + Budget Status VS Upcoming Bills & Goals */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3 min-w-0">
         {/* Left Column (2 cols): Expense Breakdown & Budget */}
-        <div className="space-y-6 lg:col-span-2">
+        <div className="space-y-4 sm:space-y-6 lg:col-span-2 min-w-0">
           {/* Budget Quick Widget */}
           {budget.has_budget && (
-            <Card className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-fg">Status Anggaran Bulanan</h3>
-                  <p className="text-xs text-fg-muted mt-0.5">
-                    Terpakai {formatRupiah(budget.spent)} dari total anggaran {formatRupiah(budget.budgeted)}
+            <Card className="p-3.5 sm:p-5 min-w-0">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-fg truncate">Status Anggaran Bulanan</h3>
+                  <p className="text-xs text-fg-muted mt-0.5 truncate">
+                    Terpakai {formatRupiah(budget.spent)} dari total {formatRupiah(budget.budgeted)}
                   </p>
                 </div>
                 <Badge
                   tone={
                     budget.percent > 100 ? 'expense' : budget.percent >= 80 ? 'warning' : 'primary'
                   }
+                  className="shrink-0 text-xs"
                 >
                   {budget.percent}% terpakai
                 </Badge>
@@ -246,9 +247,9 @@ export function DashboardPage() {
                 />
               </div>
 
-              <div className="mt-3 flex items-center justify-between text-xs text-fg-muted">
-                <span>Sisa Anggaran: <strong className="text-fg">{formatRupiah(budget.remaining)}</strong></span>
-                <Link to="/budgets" className="text-primary hover:underline font-semibold flex items-center gap-1">
+              <div className="mt-3 flex items-center justify-between text-xs text-fg-muted gap-2">
+                <span className="truncate">Sisa: <strong className="text-fg">{formatRupiah(budget.remaining)}</strong></span>
+                <Link to="/budgets" className="text-primary hover:underline font-semibold flex items-center gap-1 shrink-0">
                   Atur Anggaran <ChevronRight className="size-3" />
                 </Link>
               </div>
@@ -256,31 +257,31 @@ export function DashboardPage() {
           )}
 
           {/* Expense by category */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="text-sm font-bold text-fg">Pengeluaran Terbesar per Kategori</h3>
-              <Link to="/reports" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-                Laporan Lengkap <ChevronRight className="size-3" />
+          <Card className="p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-border gap-2">
+              <h3 className="text-sm font-bold text-fg truncate">Pengeluaran Terbesar per Kategori</h3>
+              <Link to="/reports" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0">
+                Laporan <ChevronRight className="size-3" />
               </Link>
             </div>
 
-            <div className="mt-4 space-y-3.5">
+            <div className="mt-3.5 space-y-3">
               {expense_by_category.length === 0 ? (
                 <div className="py-8 text-center text-sm text-fg-muted">
                   Belum ada pengeluaran tercatat bulan ini.
                 </div>
               ) : (
                 expense_by_category.slice(0, 5).map((cat) => (
-                  <div key={cat.category_id ?? cat.name} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
+                  <div key={cat.category_id ?? cat.name} className="space-y-1.5 min-w-0">
+                    <div className="flex items-center justify-between text-xs gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <IconBadge icon={cat.icon} color={cat.color} size="sm" />
-                        <span className="font-semibold text-fg">{cat.name}</span>
-                        <span className="text-fg-subtle">({cat.count} transaksi)</span>
+                        <span className="font-semibold text-fg truncate">{cat.name}</span>
+                        <span className="text-fg-subtle shrink-0">({cat.count})</span>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="font-bold tabular text-fg">{formatRupiah(cat.total)}</span>
-                        <span className="ml-1.5 text-fg-subtle">{cat.percent}%</span>
+                        <span className="ml-1 text-fg-subtle">({cat.percent}%)</span>
                       </div>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-surface-2 overflow-hidden">
@@ -296,40 +297,40 @@ export function DashboardPage() {
           </Card>
 
           {/* Recent Transactions List */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="text-sm font-bold text-fg">Transaksi Terbaru</h3>
-              <Link to="/transactions" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
+          <Card className="p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-border gap-2">
+              <h3 className="text-sm font-bold text-fg truncate">Transaksi Terbaru</h3>
+              <Link to="/transactions" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0">
                 Lihat Semua <ChevronRight className="size-3" />
               </Link>
             </div>
 
-            <div className="mt-3 divide-y divide-border">
+            <div className="mt-2 divide-y divide-border">
               {recent_transactions.length === 0 ? (
                 <div className="py-8 text-center text-sm text-fg-muted">
                   Belum ada transaksi. Klik "Catat Transaksi" untuk memulai.
                 </div>
               ) : (
                 recent_transactions.slice(0, 6).map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between py-3">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div key={tx.id} className="flex items-center justify-between py-2.5 sm:py-3 gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                       <IconBadge
                         icon={tx.category?.icon || tx.account?.icon || 'circle-dot'}
                         color={tx.category?.color || tx.account?.color}
                       />
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm text-fg truncate">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-xs sm:text-sm text-fg truncate">
                           {tx.description || tx.category?.name || 'Transaksi'}
                         </p>
-                        <p className="text-xs text-fg-subtle">
+                        <p className="text-[11px] sm:text-xs text-fg-subtle truncate">
                           {tx.date} • {tx.account?.name ?? 'Akun'} {tx.counterparty ? `• ${tx.counterparty}` : ''}
                         </p>
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0 pl-3">
+                    <div className="text-right shrink-0 pl-2">
                       <p
-                        className={`font-bold tabular text-sm ${
+                        className={`font-bold tabular text-xs sm:text-sm ${
                           tx.flow === 'in' ? 'text-income' : 'text-expense'
                         }`}
                       >
@@ -337,7 +338,7 @@ export function DashboardPage() {
                         {formatRupiah(tx.amount)}
                       </p>
                       {tx.type === 'transfer' && (
-                        <Badge tone="transfer" className="mt-0.5">
+                        <Badge tone="transfer" className="mt-0.5 text-[10px]">
                           Transfer
                         </Badge>
                       )}
@@ -350,20 +351,20 @@ export function DashboardPage() {
         </div>
 
         {/* Right Column (1 col): Upcoming Bills & Savings Goals */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 min-w-0">
           {/* Upcoming Bills */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-1.5">
-                <CalendarClock className="size-4 text-warning" />
-                <h3 className="text-sm font-bold text-fg">Tagihan Mendatang</h3>
+          <Card className="p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-border gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <CalendarClock className="size-4 text-warning shrink-0" />
+                <h3 className="text-sm font-bold text-fg truncate">Tagihan Mendatang</h3>
               </div>
-              <Link to="/bills" className="text-xs font-semibold text-primary hover:underline">
+              <Link to="/bills" className="text-xs font-semibold text-primary hover:underline shrink-0">
                 Kelola
               </Link>
             </div>
 
-            <div className="mt-3 space-y-3">
+            <div className="mt-3 space-y-2.5">
               {upcoming_bills.length === 0 ? (
                 <div className="py-6 text-center text-xs text-fg-muted">
                   Tidak ada tagihan yang harus dibayar saat ini.
@@ -374,14 +375,14 @@ export function DashboardPage() {
                   return (
                     <div
                       key={bill.id}
-                      className="flex items-center justify-between rounded-xl border border-border p-3 transition-colors hover:bg-surface-2"
+                      className="flex items-center justify-between rounded-xl border border-border p-2.5 sm:p-3 transition-colors hover:bg-surface-2 gap-2 min-w-0"
                     >
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-fg truncate">{bill.name}</p>
-                        <p className="text-[11px] text-fg-subtle mt-0.5">
+                        <p className="text-[11px] text-fg-subtle mt-0.5 truncate">
                           Jatuh tempo: {bill.next_due_date || '—'}
                         </p>
-                        <p className="text-xs font-extrabold text-fg tabular mt-1">
+                        <p className="text-xs font-extrabold text-fg tabular mt-1 truncate">
                           {formatRupiah(bill.amount)}
                         </p>
                       </div>
@@ -389,7 +390,7 @@ export function DashboardPage() {
                       <Button
                         size="sm"
                         variant={isOverdue ? 'danger' : 'secondary'}
-                        className="h-8 text-xs shrink-0"
+                        className="h-8 text-xs shrink-0 px-2.5"
                         loading={payBillMutation.isPending}
                         onClick={() => payBillMutation.mutate(bill.id)}
                       >
@@ -403,36 +404,36 @@ export function DashboardPage() {
           </Card>
 
           {/* Savings Goals */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-1.5">
-                <Target className="size-4 text-primary" />
-                <h3 className="text-sm font-bold text-fg">Target Tabungan</h3>
+          <Card className="p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-border gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Target className="size-4 text-primary shrink-0" />
+                <h3 className="text-sm font-bold text-fg truncate">Target Tabungan</h3>
               </div>
-              <Link to="/goals" className="text-xs font-semibold text-primary hover:underline">
+              <Link to="/goals" className="text-xs font-semibold text-primary hover:underline shrink-0">
                 Lihat Semua
               </Link>
             </div>
 
-            <div className="mt-3 space-y-3.5">
+            <div className="mt-3 space-y-3">
               {goals.length === 0 ? (
                 <div className="py-6 text-center text-xs text-fg-muted">
                   Belum ada target tabungan. Pasang impian finansial Anda sekarang.
                 </div>
               ) : (
                 goals.map((g) => (
-                  <div key={g.id} className="space-y-1.5 rounded-xl border border-border p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                  <div key={g.id} className="space-y-1.5 rounded-xl border border-border p-2.5 sm:p-3 min-w-0">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <IconBadge icon={g.icon} color={g.color} size="sm" />
-                        <div>
-                          <p className="text-xs font-bold text-fg">{g.name}</p>
-                          <p className="text-[11px] text-fg-subtle">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-fg truncate">{g.name}</p>
+                          <p className="text-[11px] text-fg-subtle truncate">
                             {formatRupiah(g.saved_amount)} / {formatRupiah(g.target_amount)}
                           </p>
                         </div>
                       </div>
-                      <Badge tone="primary">{g.percent}%</Badge>
+                      <Badge tone="primary" className="shrink-0 text-[10px] sm:text-xs px-1.5 py-0.5">{g.percent}%</Badge>
                     </div>
                     <Progress value={g.percent} tone="primary" />
                   </div>
@@ -442,22 +443,22 @@ export function DashboardPage() {
           </Card>
 
           {/* Quick Accounts list */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="text-sm font-bold text-fg">Rekening & Dompet</h3>
-              <Link to="/accounts" className="text-xs font-semibold text-primary hover:underline">
+          <Card className="p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-border gap-2">
+              <h3 className="text-sm font-bold text-fg truncate">Rekening & Dompet</h3>
+              <Link to="/accounts" className="text-xs font-semibold text-primary hover:underline shrink-0">
                 Detail
               </Link>
             </div>
 
             <div className="mt-3 space-y-2">
               {accounts.map((acc) => (
-                <div key={acc.id} className="flex items-center justify-between py-1.5 text-xs">
-                  <div className="flex items-center gap-2">
+                <div key={acc.id} className="flex items-center justify-between py-1.5 text-xs gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <IconBadge icon={acc.icon} color={acc.color} size="sm" />
-                    <span className="font-semibold text-fg">{acc.name}</span>
+                    <span className="font-semibold text-fg truncate">{acc.name}</span>
                   </div>
-                  <span className="font-bold tabular text-fg">{formatRupiah(acc.balance)}</span>
+                  <span className="font-bold tabular text-fg shrink-0 text-right">{formatRupiah(acc.balance)}</span>
                 </div>
               ))}
             </div>

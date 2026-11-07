@@ -117,7 +117,7 @@ export function BillsPage() {
   const totalMonthlyBills = bills.reduce((acc, b) => acc + Number(b.amount), 0)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
       {/* Top Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -193,20 +193,20 @@ export function BillsPage() {
           {bills.map((b) => {
             const isOverdue = b.status === 'overdue'
             return (
-              <Card key={b.id} className="p-5 flex flex-col justify-between transition-all hover:border-border-strong">
+              <Card key={b.id} className="p-4 sm:p-5 flex flex-col justify-between transition-all hover:border-border-strong min-w-0">
                 <div>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                       <IconBadge icon={b.category?.icon || 'receipt'} color={b.category?.color || '#F59E0B'} size="md" />
-                      <div>
-                        <h3 className="font-bold text-base text-fg leading-tight">{b.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-sm sm:text-base text-fg leading-tight truncate">{b.name}</h3>
                         <Badge tone="neutral" className="mt-1 text-[10px] uppercase">
                           {b.frequency}
                         </Badge>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -229,16 +229,16 @@ export function BillsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    <span className="text-[11px] font-semibold text-fg-subtle">Nominal Tagihan</span>
-                    <p className="text-2xl font-black tabular tracking-tight text-fg mt-0.5">
+                  <div className="mt-3.5 sm:mt-4">
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-fg-subtle">Nominal Tagihan</span>
+                    <p className="text-xl sm:text-2xl font-black tabular tracking-tight text-fg mt-0.5 truncate">
                       {formatRupiah(b.amount)}
                     </p>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between text-xs">
-                    <span className="text-fg-muted">Jatuh Tempo:</span>
-                    <span className={`font-bold tabular ${isOverdue ? 'text-expense' : 'text-fg'}`}>
+                  <div className="mt-2.5 sm:mt-3 flex items-center justify-between text-xs gap-2">
+                    <span className="text-fg-muted shrink-0">Jatuh Tempo:</span>
+                    <span className={`font-bold tabular truncate ${isOverdue ? 'text-expense' : 'text-fg'}`}>
                       {b.next_due_date || '—'} {isOverdue && '(Terlambat)'}
                     </span>
                   </div>
@@ -250,15 +250,15 @@ export function BillsPage() {
                   )}
                 </div>
 
-                <div className="mt-5 pt-3 border-t border-border flex items-center justify-between">
-                  <Badge tone={isOverdue ? 'expense' : 'warning'}>
+                <div className="mt-4 sm:mt-5 pt-3 border-t border-border flex items-center justify-between gap-2">
+                  <Badge tone={isOverdue ? 'expense' : 'warning'} className="shrink-0 text-[10px] sm:text-xs">
                     {isOverdue ? 'Jatuh Tempo' : b.days_until_due !== null ? `${b.days_until_due} hari lagi` : 'Aktif'}
                   </Badge>
 
                   <Button
                     size="sm"
                     variant={isOverdue ? 'danger' : 'primary'}
-                    className="h-8 text-xs gap-1.5"
+                    className="h-8 text-xs gap-1.5 shrink-0"
                     onClick={() => setPayBill(b)}
                   >
                     <CreditCard className="size-3.5" /> Bayar Sekarang

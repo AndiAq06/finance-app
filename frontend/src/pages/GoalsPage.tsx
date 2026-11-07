@@ -117,7 +117,7 @@ export function GoalsPage() {
   const totalPercent = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
       {/* Top Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -202,20 +202,20 @@ export function GoalsPage() {
                 className="p-4 sm:p-5 flex flex-col justify-between transition-all hover:border-border-strong relative"
               >
                 <div>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                       <IconBadge icon={g.icon} color={g.color} size="md" />
-                      <div>
-                        <h3 className="font-bold text-base text-fg leading-tight">{g.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-sm sm:text-base text-fg leading-tight truncate">{g.name}</h3>
                         {g.deadline && (
-                          <div className="flex items-center gap-1 text-[11px] text-fg-subtle mt-0.5">
-                            <Clock className="size-3" /> Target: {g.deadline}
+                          <div className="flex items-center gap-1 text-[11px] text-fg-subtle mt-0.5 truncate">
+                            <Clock className="size-3 shrink-0" /> Target: {g.deadline}
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -240,11 +240,11 @@ export function GoalsPage() {
 
                   {/* Amounts */}
                   <div className="mt-4 sm:mt-5 space-y-1">
-                    <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5 sm:gap-1">
-                      <span className="text-xl sm:text-2xl font-black tabular tracking-tight text-fg">
+                    <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5 sm:gap-1 min-w-0">
+                      <span className="text-xl sm:text-2xl font-black tabular tracking-tight text-fg truncate">
                         {formatRupiah(g.saved_amount)}
                       </span>
-                      <span className="text-xs text-fg-subtle font-medium">
+                      <span className="text-xs text-fg-subtle font-medium truncate">
                         dari {formatRupiah(g.target_amount)}
                       </span>
                     </div>
@@ -253,9 +253,9 @@ export function GoalsPage() {
                       <Progress value={g.percent} tone={isAchieved ? 'primary' : 'primary'} />
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-fg-muted mt-1">
-                      <span>{g.percent}% Terkumpul</span>
-                      <span>Sisa: {formatRupiah(g.remaining)}</span>
+                    <div className="flex items-center justify-between text-[11px] text-fg-muted mt-1 gap-2">
+                      <span className="shrink-0">{g.percent}% Terkumpul</span>
+                      <span className="truncate text-right">Sisa: {formatRupiah(g.remaining)}</span>
                     </div>
                   </div>
 

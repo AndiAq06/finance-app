@@ -19,18 +19,19 @@ export function ReportsPage() {
   const { data: comparisonData, isLoading: cmpLoading } = useComparison({ year })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
       {/* Top Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-fg">Laporan & Analitik Keuangan</h1>
-          <p className="text-sm text-fg-muted mt-0.5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-fg truncate">Laporan & Analitik Keuangan</h1>
+          <p className="text-xs sm:text-sm text-fg-muted mt-0.5">
             Visualisasikan tren pendapatan, pengeluaran, dan evolusi aset bersih Anda.
           </p>
         </div>
 
-        <div className="flex justify-start sm:justify-end">
+        <div className="flex justify-start sm:justify-end overflow-x-auto max-w-full pb-1 min-w-0 scrollbar-none">
           <Segmented
+            size="sm"
             value={activeTab}
             onChange={(t) => setActiveTab(t)}
             options={[

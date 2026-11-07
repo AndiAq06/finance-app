@@ -98,7 +98,7 @@ export function TransactionsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
       {/* Top Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -289,32 +289,32 @@ export function TransactionsPage() {
             {transactions.map((t) => (
               <div
                 key={t.id}
-                className="flex items-center justify-between p-4 transition-colors hover:bg-surface-2"
+                className="flex items-center justify-between p-3 sm:p-4 transition-colors hover:bg-surface-2 gap-2 min-w-0"
               >
-                <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
                   <IconBadge
                     icon={t.category?.icon || t.account?.icon || 'circle-dot'}
                     color={t.category?.color || t.account?.color}
                   />
 
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-fg truncate">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm font-bold text-fg truncate">
                       {t.description || t.category?.name || 'Transaksi'}
                     </p>
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-fg-subtle mt-0.5">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-fg-subtle mt-0.5">
                       <span>{t.date}</span>
                       <span>•</span>
-                      <span className="font-medium text-fg-muted">{t.account?.name ?? 'Akun'}</span>
+                      <span className="font-medium text-fg-muted truncate max-w-[100px] sm:max-w-none">{t.account?.name ?? 'Akun'}</span>
                       {t.category && (
                         <>
                           <span>•</span>
-                          <span>{t.category.name}</span>
+                          <span className="truncate max-w-[100px] sm:max-w-none">{t.category.name}</span>
                         </>
                       )}
                       {t.counterparty && (
                         <>
                           <span>•</span>
-                          <span className="italic">{t.counterparty}</span>
+                          <span className="italic truncate max-w-[80px] sm:max-w-none">{t.counterparty}</span>
                         </>
                       )}
                       {t.type === 'transfer' && (
@@ -339,10 +339,10 @@ export function TransactionsPage() {
                 </div>
 
                 {/* Right Amount & Actions */}
-                <div className="flex items-center gap-4 shrink-0 pl-3">
+                <div className="flex items-center gap-1.5 sm:gap-4 shrink-0 pl-1 sm:pl-3">
                   <div className="text-right">
                     <p
-                      className={`text-sm font-bold tabular ${
+                      className={`text-xs sm:text-sm font-bold tabular ${
                         t.flow === 'in' ? 'text-income' : 'text-expense'
                       }`}
                     >
@@ -351,7 +351,7 @@ export function TransactionsPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
                     <Button
                       variant="ghost"
                       size="icon-sm"

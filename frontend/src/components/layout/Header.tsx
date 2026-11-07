@@ -38,9 +38,9 @@ export function Header({
   const notifications = notifData?.data ?? []
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center justify-between border-b border-border bg-surface/90 px-3 sm:px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full max-w-full items-center justify-between border-b border-border bg-surface/90 px-3 sm:px-6 backdrop-blur-md">
       {/* Left section: Mobile menu + Brand + Search trigger */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         {onOpenSidebar && (
           <Button
             variant="ghost"
@@ -126,7 +126,7 @@ export function Header({
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-0 sm:w-96" align="end">
+          <PopoverContent className="w-[calc(100vw-1.5rem)] max-w-sm p-0 sm:w-96" align="end">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-fg">Notifikasi</span>

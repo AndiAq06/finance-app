@@ -29,12 +29,12 @@ export function AppLayout() {
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-bg text-fg">
+    <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-bg text-fg">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content Area */}
-      <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0">
+      <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0 w-full max-w-full overflow-x-hidden">
         <Header
           onOpenSidebar={() => setSidebarOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
@@ -49,7 +49,7 @@ export function AppLayout() {
         />
 
         {/* Page Content Container */}
-        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in min-w-0 overflow-x-hidden">
           <Outlet />
         </main>
       </div>

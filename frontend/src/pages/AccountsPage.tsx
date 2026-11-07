@@ -91,7 +91,7 @@ export function AccountsPage() {
   const totalBalance = data?.total_balance ?? '0'
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
       {/* Header & Total Net Worth */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -171,18 +171,18 @@ export function AccountsPage() {
               }`}
             >
               <div>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                     <IconBadge icon={acc.icon} color={acc.color} size="md" />
-                    <div>
-                      <h3 className="font-bold text-base text-fg leading-tight">{acc.name}</h3>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-sm sm:text-base text-fg leading-tight truncate">{acc.name}</h3>
                       <Badge tone="neutral" className="mt-1 text-[10px] uppercase">
                         {acc.type}
                       </Badge>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {!acc.is_active ? (
                       <Button
                         variant="secondary"
@@ -220,17 +220,17 @@ export function AccountsPage() {
                   </div>
                 </div>
 
-                <div className="mt-5">
-                  <span className="text-[11px] font-semibold text-fg-subtle">Saldo Saat Ini</span>
-                  <p className="text-2xl font-black tabular tracking-tight text-fg mt-0.5">
+                <div className="mt-4 sm:mt-5">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-fg-subtle">Saldo Saat Ini</span>
+                  <p className="text-xl sm:text-2xl font-black tabular tracking-tight text-fg mt-0.5 truncate">
                     {formatRupiah(acc.balance)}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-fg-muted">
-                <span>Saldo awal: {formatRupiah(acc.opening_balance)}</span>
-                <span>{acc.transactions_count ?? 0} transaksi</span>
+              <div className="mt-3.5 sm:mt-4 pt-2.5 sm:pt-3 border-t border-border flex items-center justify-between text-[11px] sm:text-xs text-fg-muted gap-2">
+                <span className="truncate">Saldo awal: {formatRupiah(acc.opening_balance)}</span>
+                <span className="shrink-0">{acc.transactions_count ?? 0} transaksi</span>
               </div>
             </Card>
           ))}
