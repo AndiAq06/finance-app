@@ -89,7 +89,7 @@ export function DashboardPage() {
   const isNetPositive = Number(month?.net ?? 0) >= 0
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
       {/* Top Banner / Welcome greeting */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
         <div className="min-w-0">

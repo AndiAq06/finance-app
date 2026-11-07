@@ -117,7 +117,7 @@ export function GoalsPage() {
   const totalPercent = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
       {/* Top Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

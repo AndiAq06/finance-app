@@ -91,7 +91,7 @@ export function AccountsPage() {
   const totalBalance = data?.total_balance ?? '0'
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
       {/* Header & Total Net Worth */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
