@@ -21,6 +21,7 @@ export function AccountsPage() {
   const [name, setName] = React.useState('')
   const [type, setType] = React.useState<AccountType>('bank')
   const [openingBalance, setOpeningBalance] = React.useState('')
+  const [currentBalance, setCurrentBalance] = React.useState('')
   const [startDate, setStartDate] = React.useState(todayISO())
   const [color, setColor] = React.useState('#16A34A')
   const [icon, setIcon] = React.useState('wallet')
@@ -31,6 +32,7 @@ export function AccountsPage() {
       setName(editAccount.name)
       setType(editAccount.type)
       setOpeningBalance(editAccount.opening_balance)
+      setCurrentBalance(editAccount.balance)
       setStartDate(editAccount.start_date || todayISO())
       setColor(editAccount.color || '#16A34A')
       setIcon(editAccount.icon || 'wallet')
@@ -39,6 +41,7 @@ export function AccountsPage() {
       setName('')
       setType('bank')
       setOpeningBalance('')
+      setCurrentBalance('')
       setStartDate(todayISO())
       setColor('#16A34A')
       setIcon('wallet')
@@ -52,6 +55,7 @@ export function AccountsPage() {
         name,
         type,
         opening_balance: Number(openingBalance),
+        current_balance: editAccount && currentBalance !== '' ? Number(currentBalance) : undefined,
         start_date: startDate,
         color,
         icon,
@@ -282,6 +286,21 @@ export function AccountsPage() {
                   placeholder="0"
                 />
               </Field>
+
+              {editAccount && (
+                <div className="sm:col-span-2">
+                  <Field 
+                    label="Saldo Saat Ini (Saldo Riil)" 
+                    hint="Koreksi langsung saldo riil saat ini jika ada ketidaksesuaian tanpa mengubah saldo awal"
+                  >
+                    <AmountInput
+                      value={currentBalance}
+                      onValueChange={setCurrentBalance}
+                      placeholder="0"
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
 
             <Field label="Pilih Ikon Rekening">

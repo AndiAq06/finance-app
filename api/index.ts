@@ -489,6 +489,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             userId
           ]
         );
+
+        if (upd.rows.length === 0) {
+          return res.status(404).json({ message: 'Rekening tidak ditemukan.' });
+        }
+
+        // Handle current_balance adjustment directly without modifying opening_balance
+        if (b.current_balance !== undefined && b.current_balance !== null && b.current_balance !== '') {
+          const targetBal = Math.round(Number(b.current_balance) * 100) / 100;
+          const curBalRes = await query(
+            `SELECT (a.opening_balance + 
+               COALESCE((SELECT SUM(amount) FROM transactions t WHERE t.account_id = a.id AND t.flow = 'in'), 0) -
+               COALESCE((SELECT SUM(amount) FROM transactions t WHERE t.account_id = a.id AND t.flow = 'out'), 0)
+             ) as balance
+             FROM accounts a WHERE a.id = $1 AND a.user_id = $2`,
+            [accId, userId]
+          );
+
+          if (curBalRes.rows.length > 0) {
+            const existingBal = Math.round(Number(curBalRes.rows[0].balance) * 100) / 100;
+            const diff = Math.round((targetBal - existingBal) * 100) / 100;
+
+            if (Math.abs(diff) >= 0.01) {
+              const isPositive = diff > 0;
+              const flow = isPositive ? 'in' : 'out';
+              const type = isPositive ? 'income' : 'expense';
+              const adjAmount = Math.abs(diff);
+              const today = new Date().toISOString().slice(0, 10);
+
+              await query(
+                `INSERT INTO transactions (user_id, account_id, category_id, type, flow, date, amount, description, notes, has_attachment, created_at, updated_at)
+                 VALUES ($1, $2, NULL, $3, $4, $5, $6, 'Penyesuaian Saldo', 'Koreksi saldo saat ini dari pengaturan rekening', false, NOW(), NOW())`,
+                [userId, accId, type, flow, today, adjAmount]
+              );
+            }
+          }
+        }
+
         return res.status(200).json(upd.rows[0]);
       }
       if (req.method === 'DELETE') {
