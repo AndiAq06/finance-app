@@ -901,6 +901,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (req.method === 'GET') {
         const accountId = url.searchParams.get('account_id');
         const categoryId = url.searchParams.get('category_id');
+        const month = url.searchParams.get('month');
         const flow = url.searchParams.get('flow');
         const type = url.searchParams.get('type');
         const search = url.searchParams.get('q') || url.searchParams.get('search');
@@ -915,8 +916,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           whereClauses.push(`t.account_id = $${params.length}`);
         }
         if (categoryId) {
-          params.push(Number(categoryId));
-          whereClauses.push(`t.category_id = $${params.length}`);
+          if (categoryId === 'uncategorized' || categoryId === 'null' || categoryId === 'none' || categoryId === '0') {
+            whereClauses.push(`t.category_id IS NULL`);
+          } else {
+            params.push(Number(categoryId));
+            whereClauses.push(`t.category_id = $${params.length}`);
+          }
+        }
+        if (month) {
+          params.push(`${month}%`);
+          whereClauses.push(`t.date::text LIKE $${params.length}`);
         }
         if (flow) {
           params.push(flow);
@@ -1102,6 +1111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const accountId = url.searchParams.get('account_id');
         const categoryId = url.searchParams.get('category_id');
+        const month = url.searchParams.get('month');
         const flow = url.searchParams.get('flow');
         const type = url.searchParams.get('type');
         const search = url.searchParams.get('q') || url.searchParams.get('search');
@@ -1116,8 +1126,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           whereClauses.push(`t.account_id = $${params.length}`);
         }
         if (categoryId) {
-          params.push(Number(categoryId));
-          whereClauses.push(`t.category_id = $${params.length}`);
+          if (categoryId === 'uncategorized' || categoryId === 'null' || categoryId === 'none' || categoryId === '0') {
+            whereClauses.push(`t.category_id IS NULL`);
+          } else {
+            params.push(Number(categoryId));
+            whereClauses.push(`t.category_id = $${params.length}`);
+          }
+        }
+        if (month) {
+          params.push(`${month}%`);
+          whereClauses.push(`t.date::text LIKE $${params.length}`);
         }
         if (flow) {
           params.push(flow);
