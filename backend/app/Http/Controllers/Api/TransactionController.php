@@ -23,7 +23,17 @@ class TransactionController extends Controller
         }
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+            $catId = $request->input('category_id');
+            if ($catId === 'uncategorized' || $catId === 'null' || $catId === 'none' || $catId === '0') {
+                $query->whereNull('category_id');
+            } else {
+                $query->where('category_id', $catId);
+            }
+        }
+
+        if ($request->filled('month')) {
+            $month = $request->input('month');
+            $query->where('date', 'like', "$month%");
         }
 
         if ($request->filled('type')) {
@@ -246,7 +256,17 @@ class TransactionController extends Controller
             $query->where('account_id', $request->input('account_id'));
         }
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+            $catId = $request->input('category_id');
+            if ($catId === 'uncategorized' || $catId === 'null' || $catId === 'none' || $catId === '0') {
+                $query->whereNull('category_id');
+            } else {
+                $query->where('category_id', $catId);
+            }
+        }
+
+        if ($request->filled('month')) {
+            $month = $request->input('month');
+            $query->where('date', 'like', "$month%");
         }
         if ($request->filled('type')) {
             $query->where('type', $request->input('type'));

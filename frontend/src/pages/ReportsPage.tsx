@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { Link } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend, PieChart, Pie, Cell,
@@ -197,18 +199,27 @@ export function ReportsPage() {
                 </div>
 
                 <div className="divide-y divide-border pt-2">
-                  {summary.expense_by_category.map((c) => (
-                    <div key={c.category_id ?? c.name} className="flex items-center justify-between py-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="size-3 rounded-full" style={{ backgroundColor: c.color }} />
-                        <span className="font-semibold text-fg">{c.name}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="tabular font-bold text-fg">{formatRupiah(c.total)}</span>
-                        <span className="ml-2 text-fg-subtle">({c.percent}%)</span>
-                      </div>
-                    </div>
-                  ))}
+                  {summary.expense_by_category.map((c) => {
+                    const targetId = c.category_id ?? 'uncategorized'
+                    return (
+                      <Link
+                        key={targetId}
+                        to={`/categories/${targetId}`}
+                        className="flex items-center justify-between py-2.5 px-2 -mx-2 rounded-lg hover:bg-surface-2 transition text-xs group cursor-pointer"
+                        title={`Buka rincian pengeluaran ${c.name}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="size-3 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                          <span className="font-semibold text-fg group-hover:text-primary transition truncate">{c.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-right shrink-0">
+                          <span className="tabular font-bold text-fg">{formatRupiah(c.total)}</span>
+                          <span className="text-fg-subtle">({c.percent}%)</span>
+                          <ChevronRight className="size-3 text-fg-subtle group-hover:text-primary group-hover:translate-x-0.5 transition" />
+                        </div>
+                      </Link>
+                    )
+                  })}
                 </div>
               </div>
             ) : (

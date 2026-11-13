@@ -259,39 +259,53 @@ export function DashboardPage() {
           {/* Expense by category */}
           <Card className="p-3.5 sm:p-5 min-w-0">
             <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-border gap-2">
-              <h3 className="text-sm font-bold text-fg truncate">Pengeluaran Terbesar per Kategori</h3>
-              <Link to="/reports" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0">
-                Laporan <ChevronRight className="size-3" />
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-fg truncate">Pengeluaran Terbesar per Kategori</h3>
+                <p className="text-[11px] text-fg-subtle truncate">Klik kategori untuk melihat rincian pengeluaran</p>
+              </div>
+              <Link to="/categories" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0">
+                Semua Kategori <ChevronRight className="size-3" />
               </Link>
             </div>
 
-            <div className="mt-3.5 space-y-3">
+            <div className="mt-3.5 space-y-2">
               {expense_by_category.length === 0 ? (
                 <div className="py-8 text-center text-sm text-fg-muted">
                   Belum ada pengeluaran tercatat bulan ini.
                 </div>
               ) : (
-                expense_by_category.slice(0, 5).map((cat) => (
-                  <div key={cat.category_id ?? cat.name} className="space-y-1.5 min-w-0">
-                    <div className="flex items-center justify-between text-xs gap-2 min-w-0">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <IconBadge icon={cat.icon} color={cat.color} size="sm" />
-                        <span className="font-semibold text-fg truncate">{cat.name}</span>
-                        <span className="text-fg-subtle shrink-0">({cat.count})</span>
+                expense_by_category.slice(0, 5).map((cat) => {
+                  const targetId = cat.category_id ?? 'uncategorized'
+                  return (
+                    <Link
+                      key={targetId}
+                      to={`/categories/${targetId}`}
+                      className="group block space-y-1.5 p-2 -mx-2 rounded-xl hover:bg-surface-2/70 transition cursor-pointer min-w-0"
+                      title={`Buka rincian pengeluaran ${cat.name}`}
+                    >
+                      <div className="flex items-center justify-between text-xs gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <IconBadge icon={cat.icon} color={cat.color} size="sm" />
+                          <span className="font-semibold text-fg group-hover:text-primary transition truncate">
+                            {cat.name}
+                          </span>
+                          <span className="text-fg-subtle shrink-0">({cat.count})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-right shrink-0">
+                          <span className="font-bold tabular text-fg">{formatRupiah(cat.total)}</span>
+                          <span className="text-fg-subtle text-[11px]">({cat.percent}%)</span>
+                          <ChevronRight className="size-3 text-fg-subtle group-hover:text-primary group-hover:translate-x-0.5 transition" />
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-bold tabular text-fg">{formatRupiah(cat.total)}</span>
-                        <span className="ml-1 text-fg-subtle">({cat.percent}%)</span>
+                      <div className="h-1.5 w-full rounded-full bg-surface-2 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, cat.percent)}%`, backgroundColor: cat.color }}
+                        />
                       </div>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-surface-2 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, cat.percent)}%`, backgroundColor: cat.color }}
-                      />
-                    </div>
-                  </div>
-                ))
+                    </Link>
+                  )
+                })
               )}
             </div>
           </Card>

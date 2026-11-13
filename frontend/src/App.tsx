@@ -12,6 +12,7 @@ import { DebtsPage } from '@/pages/DebtsPage'
 import { BillsPage } from '@/pages/BillsPage'
 import { RecurringPage } from '@/pages/RecurringPage'
 import { ReportsPage } from '@/pages/ReportsPage'
+import { CategoryExpensesPage } from '@/pages/CategoryExpensesPage'
 import { CalendarPage } from '@/pages/CalendarPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { AuthPage } from '@/pages/AuthPage'
@@ -57,6 +58,8 @@ function AppRouter() {
           <Route path="/bills" element={<BillsPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/categories" element={<CategoryExpensesPage />} />
+          <Route path="/categories/:id" element={<CategoryExpensesPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

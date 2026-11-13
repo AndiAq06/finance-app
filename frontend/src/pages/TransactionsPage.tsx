@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   PlusCircle, Filter, Search, Edit2, Trash2, ChevronLeft, ChevronRight,
   Download, Upload, Paperclip, ChevronDown, ChevronUp,
@@ -17,15 +18,18 @@ import { ImportCsvModal } from '@/components/modals/ImportCsvModal'
 import type { Transaction } from '@/types'
 
 export function TransactionsPage() {
+  const [searchParams] = useSearchParams()
   const [page, setPage] = React.useState(1)
-  const [q, setQ] = React.useState('')
-  const [debouncedQ, setDebouncedQ] = React.useState('')
-  const [type, setType] = React.useState<string>('')
-  const [accountId, setAccountId] = React.useState<string>('')
-  const [categoryId, setCategoryId] = React.useState<string>('')
-  const [startDate, setStartDate] = React.useState<string>('')
-  const [endDate, setEndDate] = React.useState<string>('')
-  const [showFilters, setShowFilters] = React.useState(false)
+  const [q, setQ] = React.useState(searchParams.get('q') || '')
+  const [debouncedQ, setDebouncedQ] = React.useState(searchParams.get('q') || '')
+  const [type, setType] = React.useState<string>(searchParams.get('type') || '')
+  const [accountId, setAccountId] = React.useState<string>(searchParams.get('account_id') || '')
+  const [categoryId, setCategoryId] = React.useState<string>(searchParams.get('category_id') || '')
+  const [startDate, setStartDate] = React.useState<string>(searchParams.get('start_date') || '')
+  const [endDate, setEndDate] = React.useState<string>(searchParams.get('end_date') || '')
+  const [showFilters, setShowFilters] = React.useState(
+    Boolean(searchParams.get('category_id') || searchParams.get('type') || searchParams.get('account_id') || searchParams.get('start_date') || searchParams.get('end_date'))
+  )
 
   // Debounce search query
   React.useEffect(() => {

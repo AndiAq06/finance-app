@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ArrowLeftRight, Landmark, PieChart, Target,
   HandCoins, CalendarClock, BarChart3, Calendar, Settings, Sparkles,
-  Repeat, ChevronRight, X,
+  Repeat, ChevronRight, X, Tag,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,7 @@ const mainNav: NavItem[] = [
   { to: '/debts', label: 'Hutang & Piutang', icon: HandCoins },
   { to: '/bills', label: 'Tagihan Rutin', icon: CalendarClock },
   { to: '/recurring', label: 'Transaksi Terjadwal', icon: Repeat },
+  { to: '/categories', label: 'Kategori Pengeluaran', icon: Tag },
   { to: '/reports', label: 'Laporan & Analitik', icon: BarChart3 },
   { to: '/calendar', label: 'Kalender Keuangan', icon: Calendar },
 ]
