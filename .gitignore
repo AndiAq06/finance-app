@@ -1,3 +1,5 @@
+node_modules/
+
 # Local portable tools & database (JANGAN DI-PUSH/DIHAPUS, BERISI MYSQL DATA & BINARIES)
 .tools/
 *.zip
