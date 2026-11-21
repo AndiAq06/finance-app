@@ -24,7 +24,7 @@ const mainNav: NavItem[] = [
   { to: '/bills', label: 'Tagihan Rutin', icon: CalendarClock },
   { to: '/recurring', label: 'Transaksi Terjadwal', icon: Repeat },
   { to: '/categories', label: 'Kategori Pengeluaran', icon: Tag },
-  { to: '/categories/manage', label: 'Kelola Kategori', icon: FolderPlus },
+  { to: '/manage-categories', label: 'Kelola Kategori', icon: FolderPlus },
   { to: '/reports', label: 'Laporan & Analitik', icon: BarChart3 },
   { to: '/calendar', label: 'Kalender Keuangan', icon: Calendar },
 ]
@@ -43,13 +43,7 @@ export function Sidebar({
       return location.pathname === '/'
     }
     if (to === '/categories') {
-      return (
-        location.pathname === '/categories' ||
-        (location.pathname.startsWith('/categories/') && location.pathname !== '/categories/manage')
-      )
-    }
-    if (to === '/categories/manage') {
-      return location.pathname === '/categories/manage'
+      return location.pathname === '/categories' || location.pathname.startsWith('/categories/')
     }
     return location.pathname === to || location.pathname.startsWith(to + '/')
   }

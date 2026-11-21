@@ -234,7 +234,7 @@ export function CategoryExpensesPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => navigate('/categories/manage')}
+            onClick={() => navigate('/manage-categories')}
             className="gap-1.5 text-xs h-9"
             title="Kelola & Tambah Kategori"
           >
@@ -276,7 +276,7 @@ export function CategoryExpensesPage() {
             Pilih Kategori Pengeluaran
           </span>
           <Link
-            to="/categories/manage"
+            to="/manage-categories"
             className="text-primary hover:underline font-semibold flex items-center gap-1 normal-case text-xs"
           >
             + Tambah Kategori Baru

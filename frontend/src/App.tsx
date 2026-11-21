@@ -59,7 +59,8 @@ function AppRouter() {
           <Route path="/bills" element={<BillsPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/categories" element={<CategoryExpensesPage />} />
-          <Route path="/categories/manage" element={<CategoriesPage />} />
+          <Route path="/manage-categories" element={<CategoriesPage />} />
+          <Route path="/categories/manage" element={<Navigate to="/manage-categories" replace />} />
           <Route path="/categories/:id" element={<CategoryExpensesPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
