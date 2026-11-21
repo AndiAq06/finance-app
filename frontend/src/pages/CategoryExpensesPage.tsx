@@ -1,9 +1,9 @@
 import * as React from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   ArrowLeft, Search, PlusCircle, Download, Calendar,
   ChevronLeft, ChevronRight, Edit2, Trash2, ArrowUpRight,
-  TrendingDown, Layers, HelpCircle,
+  TrendingDown, Layers, HelpCircle, Tag,
 } from 'lucide-react'
 import { useCategories, useTransactions, useAccounts, useDashboard, useFinanceMutation } from '@/lib/queries'
 import { api } from '@/lib/api'
@@ -230,7 +230,18 @@ export function CategoryExpensesPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate('/categories/manage')}
+            className="gap-1.5 text-xs h-9"
+            title="Kelola & Tambah Kategori"
+          >
+            <Tag className="size-3.5 text-primary" />
+            <span>Kelola / Tambah Kategori</span>
+          </Button>
+
           <Button
             variant="secondary"
             size="sm"
@@ -264,9 +275,12 @@ export function CategoryExpensesPage() {
             <Layers className="size-3.5" />
             Pilih Kategori Pengeluaran
           </span>
-          <span className="text-[11px] font-normal lowercase text-fg-subtle">
-            (klik untuk melihat rincian kategori lain)
-          </span>
+          <Link
+            to="/categories/manage"
+            className="text-primary hover:underline font-semibold flex items-center gap-1 normal-case text-xs"
+          >
+            + Tambah Kategori Baru
+          </Link>
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin">

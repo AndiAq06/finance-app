@@ -567,20 +567,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (req.method === 'POST') {
         const b = req.body || {};
+        if (!b.name || !b.name.trim()) {
+          return res.status(422).json({ error: 'Nama kategori wajib diisi.' });
+        }
         const ins = await query(
           `INSERT INTO categories (user_id, name, type, icon, color, is_default, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW()) RETURNING *`,
-          [userId, b.name, b.type, b.icon || 'tag', b.color || '#16A34A']
+          [userId, b.name.trim(), b.type || 'expense', b.icon || 'tag', b.color || '#16A34A']
         );
         return res.status(201).json({ ...ins.rows[0], id: Number(ins.rows[0].id) });
       }
     }
 
     const catMatch = pathname.match(/^\/api\/categories\/(\d+)$/);
+    if (catMatch && req.method === 'PUT') {
+      const catId = Number(catMatch[1]);
+      const b = req.body || {};
+      if (b.name !== undefined && !b.name.trim()) {
+        return res.status(422).json({ error: 'Nama kategori tidak boleh kosong.' });
+      }
+      const up = await query(
+        `UPDATE categories 
+         SET name = COALESCE($1, name), 
+             type = COALESCE($2, type), 
+             icon = COALESCE($3, icon), 
+             color = COALESCE($4, color), 
+             updated_at = NOW()
+         WHERE id = $5 AND (user_id = $6 OR user_id IS NULL)
+         RETURNING *`,
+        [b.name ? b.name.trim() : null, b.type, b.icon, b.color, catId, userId]
+      );
+      if (up.rows.length === 0) {
+        return res.status(404).json({ error: 'Kategori tidak ditemukan.' });
+      }
+      return res.status(200).json({ ...up.rows[0], id: Number(up.rows[0].id) });
+    }
+
     if (catMatch && req.method === 'DELETE') {
       const catId = Number(catMatch[1]);
-      await query('DELETE FROM categories WHERE id = $1 AND user_id = $2', [catId, userId]);
-      return res.status(200).json({ message: 'Kategori dihapus.' });
+      await query('UPDATE transactions SET category_id = NULL WHERE category_id = $1', [catId]);
+      await query('UPDATE recurrings SET category_id = NULL WHERE category_id = $1', [catId]);
+      await query('UPDATE bills SET category_id = NULL WHERE category_id = $1', [catId]);
+      await query('DELETE FROM budgets WHERE category_id = $1', [catId]);
+      await query('DELETE FROM categories WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)', [catId, userId]);
+      return res.status(200).json({ message: 'Kategori berhasil dihapus.' });
     }
 
     // 9. Dashboard API
