@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, ArrowLeftRight, Landmark, PieChart, Target,
   HandCoins, CalendarClock, BarChart3, Calendar, Settings, Sparkles,
@@ -36,6 +36,24 @@ export function Sidebar({
   isOpen: boolean
   onClose: () => void
 }) {
+  const location = useLocation()
+
+  const checkIsActive = (to: string) => {
+    if (to === '/') {
+      return location.pathname === '/'
+    }
+    if (to === '/categories') {
+      return (
+        location.pathname === '/categories' ||
+        (location.pathname.startsWith('/categories/') && location.pathname !== '/categories/manage')
+      )
+    }
+    if (to === '/categories/manage') {
+      return location.pathname === '/categories/manage'
+    }
+    return location.pathname === to || location.pathname.startsWith(to + '/')
+  }
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -81,13 +99,13 @@ export function Sidebar({
           </div>
           {mainNav.map((item) => {
             const Icon = item.icon
+            const isActive = checkIsActive(item.to)
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/'}
                 onClick={onClose}
-                className={({ isActive }) =>
+                className={() =>
                   cn(
                     'group flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-150',
                     isActive
